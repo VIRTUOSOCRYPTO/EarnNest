@@ -3,7 +3,8 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../App';
 import { 
   HomeIcon, 
-  CreditCardIcon, 
+  CreditCardIcon,
+  BanknotesIcon,
   BriefcaseIcon, 
   ChartBarIcon, 
   ArrowRightOnRectangleIcon,
@@ -19,6 +20,7 @@ const Navigation = () => {
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: HomeIcon },
     { path: '/transactions', label: 'Transactions', icon: CreditCardIcon },
+    { path: '/budget', label: 'Budget', icon: BanknotesIcon },
     { path: '/hustles', label: 'Side Hustles', icon: BriefcaseIcon },
     { path: '/analytics', label: 'Analytics', icon: ChartBarIcon },
   ];

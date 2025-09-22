@@ -8,10 +8,11 @@ class User(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     email: EmailStr
     full_name: str
+    role: str  # "Student", "Professional", "Other" - MANDATORY
     student_level: str  # "undergraduate", "graduate", "high_school"
     skills: List[str] = []
     availability_hours: int = 10  # hours per week
-    location: Optional[str] = None
+    location: str  # MANDATORY - cannot be empty, must be valid location format
     bio: Optional[str] = None
     profile_photo: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -24,16 +25,63 @@ class User(BaseModel):
     failed_login_attempts: int = 0
     last_failed_login: Optional[datetime] = None
     last_login: Optional[datetime] = None
+    
+    @validator('role')
+    def validate_role(cls, v):
+        allowed_roles = ["Student", "Professional", "Other"]
+        if v not in allowed_roles:
+            raise ValueError(f'Role must be one of: {", ".join(allowed_roles)}')
+        return v
+    
+    @validator('location')
+    def validate_location(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Location is required and cannot be empty')
+        
+        # Basic location format validation (City, State or City, Country)
+        v = v.strip()
+        if len(v) < 3:
+            raise ValueError('Location must be at least 3 characters long')
+        
+        # Check for basic city, state/country format
+        if ',' not in v and len(v.split()) < 2:
+            raise ValueError('Location should include city and state/country (e.g., "Mumbai, Maharashtra" or "New York, USA")')
+        
+        return v
 
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
     full_name: str
+    role: str  # MANDATORY
     student_level: str
     skills: List[str] = []
     availability_hours: int = 10
-    location: Optional[str] = None
+    location: str  # MANDATORY
     bio: Optional[str] = None
+
+    @validator('role')
+    def validate_role(cls, v):
+        allowed_roles = ["Student", "Professional", "Other"]
+        if v not in allowed_roles:
+            raise ValueError(f'Role must be one of: {", ".join(allowed_roles)}')
+        return v
+    
+    @validator('location')
+    def validate_location(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Location is required and cannot be empty')
+        
+        # Basic location format validation (City, State or City, Country)
+        v = v.strip()
+        if len(v) < 3:
+            raise ValueError('Location must be at least 3 characters long')
+        
+        # Check for basic city, state/country format
+        if ',' not in v and len(v.split()) < 2:
+            raise ValueError('Location should include city and state/country (e.g., "Mumbai, Maharashtra" or "New York, USA")')
+        
+        return v
 
     @validator('password')
     def validate_password(cls, v):
@@ -93,11 +141,32 @@ class UserLogin(BaseModel):
 
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
+    role: Optional[str] = None
     skills: Optional[List[str]] = None
-    availability_hours: Optional[int] = None
+    availability_hours: Optional[int] = None 
     location: Optional[str] = None
     bio: Optional[str] = None
     student_level: Optional[str] = None
+
+    @validator('role')
+    def validate_role(cls, v):
+        if v is not None:
+            allowed_roles = ["Student", "Professional", "Other"]
+            if v not in allowed_roles:
+                raise ValueError(f'Role must be one of: {", ".join(allowed_roles)}')
+        return v
+    
+    @validator('location') 
+    def validate_location(cls, v):
+        if v is not None:
+            if not v.strip():
+                raise ValueError('Location cannot be empty')
+            v = v.strip()
+            if len(v) < 3:
+                raise ValueError('Location must be at least 3 characters long')
+            if ',' not in v and len(v.split()) < 2:
+                raise ValueError('Location should include city and state/country (e.g., "Mumbai, Maharashtra" or "New York, USA")')
+        return v
 
     @validator('full_name')
     def validate_full_name(cls, v):

@@ -102,9 +102,39 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Enhanced student finance tracker app with the following updates: (1) Allow users to allocate money directly to multiple categories in one action with individual input fields for each category, (2) Include essential student categories (movies, transport, food, shopping, groceries, utilities, subscriptions, emergency fund) plus custom categories, (3) Fix profile picture upload/display issue so uploaded images immediately display correctly, (4) Both budget allocation system and multi-category expense recording features. Categories: movies, transport, food, shopping, groceries, utilities, subscriptions, emergency fund with custom category support. Multi-category allocation with individual input fields per category."
+user_problem_statement: "Implement expense tracking logic so that expenses are deducted only from the allocated category budget. During registration, make role selection mandatory and validate location input. Budget Allocation Example: Movies → ₹500, Food → ₹1000, Transport → ₹1500. Expense Logic: If user spends ₹200 on Movies → deduct from Movies allocation only. If expense > remaining budget → block with message: 'No money, you reached the limit.' Deducted/spent amounts must be shown in the respective category Spent column inside Budget section. Registration Rules: User must select a role (e.g., Student, Professional, Other). Location field must be valid (cannot be empty, must match city/state/country format). Show real-time updates in the UI: (Movies → Allocated ₹500 | Spent ₹200 | Remaining ₹300). Prevent negative balances in any category. Save spent history for each category in transaction log. Role & Location → cannot skip, must be valid before registration success."
 
 backend:
+  - task: "Expense Budget Validation and Deduction Logic"
+    implemented: true
+    working: true
+    file: "server.py, models.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "testing_required"
+        agent: "main"
+        comment: "COMPLETED: Implemented comprehensive expense tracking logic with budget validation. (1) Expenses are deducted only from allocated category budget, (2) Budget validation prevents expenses exceeding remaining budget with message 'No money, you reached the limit!', (3) Real-time budget deduction when expense is created, (4) Added budget category lookup endpoint (/api/budgets/category/{category}), (5) Prevent negative balances by validating before transaction creation, (6) All spent amounts automatically saved in transaction log and reflected in budget spent_amount field. Backend logic fully implemented and ready for testing."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: Expense budget validation and deduction logic working perfectly. All test scenarios passed: (1) Valid expense within budget - successfully created and deducted ₹500 from Movies budget, (2) Expense exceeding budget - correctly blocked with 'No money, you reached the limit!' message, (3) Expense for category without budget - properly blocked with 'No budget allocated' error, (4) Budget category lookup for existing/non-existing categories - working correctly, (5) Spent amounts properly updated after expense creation - verified ₹500 spent amount reflected in Movies budget, (6) Multi-category expense validation - Food expenses working, exceeding budget properly blocked, (7) Comprehensive budget deduction logic tested across Entertainment, Groceries, Transport, Books categories with accurate spent amount tracking (₹1200, ₹2000, ₹500, ₹600 respectively), (8) Remaining budget calculations accurate, (9) Transaction log properly records all expense entries. All 67/67 tests passed with 100% success rate."
+
+  - task: "Mandatory Registration Fields (Role & Location)"
+    implemented: true
+    working: true
+    file: "models.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "testing_required"
+        agent: "main"
+        comment: "COMPLETED: Enhanced User model and validation for mandatory registration fields. (1) Added mandatory 'role' field with validation (Student, Professional, Other), (2) Made 'location' field mandatory with proper validation (cannot be empty, must include city/state format), (3) Updated UserCreate, User, and UserUpdate models with proper validators, (4) Location validation ensures proper format like 'Mumbai, Maharashtra' or 'New York, USA', (5) Role selection enforced during registration with dropdown validation. All model changes ready for testing."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: Mandatory registration fields validation working perfectly. All validation scenarios tested successfully: (1) Registration without role field - correctly rejected with 422 status and 'Field required' error, (2) Registration without location field - properly rejected with 422 status and 'Field required' error, (3) Registration with invalid location (too short 'AB') - correctly rejected with 'Location must be at least 3 characters long' error, (4) Registration with invalid location format ('Mumbai' without state) - properly rejected with 'Location should include city and state/country' error, (5) Registration with invalid role ('InvalidRole') - correctly rejected with 'Role must be one of: Student, Professional, Other' error, (6) Valid registrations with all three allowed roles (Student, Professional, Other) and proper location formats - all successful with 200 status and JWT tokens provided. All mandatory field validation working as designed."
+
   - task: "Multi-Category Budget Allocation System"
     implemented: true
     working: true
@@ -349,6 +379,30 @@ backend:
         comment: "✅ TESTED: Budget delete functionality working perfectly. Successfully deleted budget via DELETE /api/budgets/{budget_id} endpoint. Server properly verifies budget ownership before deletion. Budget successfully removed from user's budget list after deletion. Verification confirmed that deleted budget no longer appears in GET /api/budgets response. Proper authorization and cleanup working as expected."
 
 frontend:
+  - task: "Enhanced Registration with Role & Location Validation"
+    implemented: true
+    working: "testing_required"
+    file: "Register.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "testing_required"
+        agent: "main"
+        comment: "COMPLETED: Enhanced registration form with mandatory role and location validation. (1) Added mandatory Role dropdown (Student, Professional, Other) with validation, (2) Made Location field mandatory with proper validation and format requirements, (3) Updated form validation to check role selection and location format, (4) Added helpful placeholder text and error messages, (5) Submit button disabled until all mandatory fields including role and location are valid, (6) Form layout reorganized to include role selection prominently. Registration validation fully implemented and ready for testing."
+
+  - task: "Expense Budget Validation UI" 
+    implemented: true
+    working: "testing_required"
+    file: "Transaction.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "testing_required"
+        agent: "main"
+        comment: "COMPLETED: Enhanced transaction form with comprehensive budget validation and real-time feedback. (1) Added budget validation before expense creation for both single and multi-category transactions, (2) Real-time budget information display when selecting expense categories (Allocated | Spent | Remaining), (3) Budget warning messages shown in red alert boxes with detailed error information, (4) Automatic budget checking when user selects expense category, (5) Enhanced error handling with proper loading states and submit button management, (6) Budget limit enforcement with clear 'No money, you reached the limit!' messages. Complete expense tracking UI with budget validation ready for testing."
+
   - task: "Multi-Category Budget Allocation UI"
     implemented: true  
     working: "testing_required"
@@ -507,10 +561,10 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Multi-Category Budget Allocation UI"
-    - "Multi-Category Expense Recording"
-    - "Profile Picture Upload Fix"
-    - "Direct Registration and Login (OTP Removal)"
+    - "Expense Budget Validation and Deduction Logic"
+    - "Mandatory Registration Fields (Role & Location)"
+    - "Enhanced Registration with Role & Location Validation"
+    - "Expense Budget Validation UI"
   stuck_tasks: 
     - "Rate Limiting & Security"
   test_all: false
@@ -518,7 +572,7 @@ test_plan:
 
 agent_communication:
   - agent: "main"
-    message: "Completed comprehensive production enhancement of EarnNest application. Key improvements include: (1) Complete email verification system with secure codes and HTML templates, (2) Advanced password security with strength meter and brute force protection, (3) Comprehensive input validation and sanitization, (4) Rate limiting and security hardening, (5) Database optimization with indexes and test data cleanup, (6) Support for large financial values up to ₹1 crore, (7) Admin functionality for user and hustle management, (8) Enhanced frontend with real-time validation and smart contact handling, (9) Optimized dashboard and analytics for production use, (10) Smart side hustle application flow with email/phone/website detection. All core functionality is implemented and ready for testing."
+    message: "COMPLETED comprehensive expense tracking logic and mandatory registration validation implementation. Key new features: (1) EXPENSE BUDGET VALIDATION - Expenses are now deducted only from allocated category budgets with real-time validation, users cannot exceed budget limits with 'No money, you reached the limit!' error message, automatic budget deduction and spent amount tracking, (2) MANDATORY REGISTRATION FIELDS - Role selection (Student/Professional/Other) now required with dropdown validation, Location field now mandatory with proper city/state format validation, enhanced form validation prevents submission without valid role and location, (3) REAL-TIME BUDGET UI - Transaction form shows live budget status (Allocated | Spent | Remaining) when selecting expense categories, budget warnings displayed in red alert boxes, enhanced error handling with proper loading states, (4) COMPREHENSIVE VALIDATION - Backend API endpoints validate budget limits before allowing transactions, frontend prevents invalid submissions with real-time feedback, spent amounts automatically saved in transaction log and reflected in budgets. All core expense tracking logic with budget validation and mandatory registration implemented and ready for comprehensive testing."
   - agent: "main"
     message: "Starting comprehensive testing session. All services are running (Backend: RUNNING, Frontend: RUNNING, MongoDB: RUNNING). Fixed frontend craco config typo. Ready to test all backend functionality first, then frontend. Focus on high-priority tasks: Email Verification System, Password Security Enhancement, Smart Side Hustle Application Flow, and Analytics Enhancement for Large Values."
   - agent: "testing"

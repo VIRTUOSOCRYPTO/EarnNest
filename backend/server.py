@@ -527,18 +527,54 @@ async def upload_profile_photo(request: Request, file: UploadFile = File(...), u
 @api_router.post("/transactions", response_model=Transaction)
 @limiter.limit("20/minute")
 async def create_transaction_endpoint(request: Request, transaction_data: TransactionCreate, user_id: str = Depends(get_current_user)):
-    """Create transaction with validation"""
+    """Create transaction with budget validation and automatic deduction"""
     try:
         transaction_dict = transaction_data.dict()
         transaction_dict["user_id"] = user_id
         transaction_dict["description"] = sanitize_input(transaction_dict["description"])
         transaction_dict["category"] = sanitize_input(transaction_dict["category"])
         
-        transaction = Transaction(**transaction_dict)
-        await create_transaction(transaction.dict())
-        
-        # Update user's total earnings if it's income
-        if transaction.type == "income":
+        # Budget validation logic for EXPENSES only
+        if transaction_data.type == "expense":
+            current_month = datetime.now(timezone.utc).strftime("%Y-%m")
+            
+            # Find the budget for this category and month
+            budget = await db.budgets.find_one({
+                "user_id": user_id,
+                "category": transaction_dict["category"],
+                "month": current_month
+            })
+            
+            if not budget:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"No budget allocated for '{transaction_dict['category']}' category. Please allocate budget first."
+                )
+            
+            # Check if expense exceeds remaining budget
+            remaining_budget = budget["allocated_amount"] - budget["spent_amount"]
+            if transaction_data.amount > remaining_budget:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"No money, you reached the limit! Remaining budget for '{transaction_dict['category']}': ₹{remaining_budget:.2f}, but you're trying to spend ₹{transaction_data.amount:.2f}"
+                )
+            
+            # Create the transaction first
+            transaction = Transaction(**transaction_dict)
+            await create_transaction(transaction.dict())
+            
+            # Update the budget's spent amount
+            await db.budgets.update_one(
+                {"_id": budget["_id"]},
+                {"$inc": {"spent_amount": transaction_data.amount}}
+            )
+            
+        else:
+            # For income transactions, no budget validation needed
+            transaction = Transaction(**transaction_dict)
+            await create_transaction(transaction.dict())
+            
+            # Update user's total earnings if it's income
             await db.users.update_one(
                 {"id": user_id},
                 {"$inc": {"total_earnings": transaction.amount}}
@@ -546,6 +582,8 @@ async def create_transaction_endpoint(request: Request, transaction_data: Transa
         
         return transaction
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Transaction creation error: {str(e)}")
         raise HTTPException(status_code=500, detail="Transaction creation failed")
@@ -755,6 +793,43 @@ async def get_hustle_categories_endpoint():
     return categories
 
 # Budget Routes
+@api_router.get("/budgets/category/{category}")
+@limiter.limit("30/minute")
+async def get_category_budget_endpoint(request: Request, category: str, user_id: str = Depends(get_current_user)):
+    """Get budget information for a specific category"""
+    try:
+        current_month = datetime.now(timezone.utc).strftime("%Y-%m")
+        budget = await db.budgets.find_one({
+            "user_id": user_id,
+            "category": category,
+            "month": current_month
+        })
+        
+        if not budget:
+            return {
+                "category": category,
+                "allocated_amount": 0.0,
+                "spent_amount": 0.0,
+                "remaining_amount": 0.0,
+                "has_budget": False,
+                "month": current_month
+            }
+        
+        remaining = budget["allocated_amount"] - budget["spent_amount"]
+        return {
+            "category": category,
+            "allocated_amount": budget["allocated_amount"],
+            "spent_amount": budget["spent_amount"],
+            "remaining_amount": remaining,
+            "has_budget": True,
+            "month": current_month,
+            "budget_id": budget["id"]
+        }
+        
+    except Exception as e:
+        logger.error(f"Budget category lookup error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Budget lookup failed")
+
 @api_router.post("/budgets", response_model=Budget)
 @limiter.limit("10/minute")
 async def create_budget_endpoint(request: Request, budget_data: BudgetCreate, user_id: str = Depends(get_current_user)):

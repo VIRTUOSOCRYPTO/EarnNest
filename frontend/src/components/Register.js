@@ -21,10 +21,11 @@ const Register = () => {
     password: '',
     confirmPassword: '',
     full_name: '',
+    role: '', // MANDATORY - will be required
     student_level: 'undergraduate',
     skills: '',
     availability_hours: 10,
-    location: '',
+    location: '', // MANDATORY - will be required
     bio: ''
   });
   const [loading, setLoading] = useState(false);
@@ -131,6 +132,30 @@ const Register = () => {
 
     if (formData.full_name.trim().length < 2) {
       setError('Full name must be at least 2 characters long');
+      return false;
+    }
+
+    // Mandatory role validation
+    if (!formData.role || !formData.role.trim()) {
+      setError('Role selection is required');
+      return false;
+    }
+
+    // Mandatory location validation  
+    if (!formData.location || !formData.location.trim()) {
+      setError('Location is required and cannot be empty');
+      return false;
+    }
+
+    if (formData.location.trim().length < 3) {
+      setError('Location must be at least 3 characters long');
+      return false;
+    }
+
+    // Basic location format validation
+    const location = formData.location.trim();
+    if (!location.includes(',') && location.split(' ').length < 2) {
+      setError('Location should include city and state/country (e.g., "Mumbai, Maharashtra" or "New York, USA")');
       return false;
     }
 
@@ -359,6 +384,24 @@ const Register = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Role *
+                </label>
+                <select
+                  name="role"
+                  value={formData.role}
+                  onChange={handleChange}
+                  className="input-modern"
+                  required
+                >
+                  <option value="">Select your role</option>
+                  <option value="Student">Student</option>
+                  <option value="Professional">Professional</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Student Level *
                 </label>
                 <select
@@ -373,7 +416,9 @@ const Register = () => {
                   <option value="graduate">Graduate</option>
                 </select>
               </div>
+            </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Available Hours/Week
@@ -389,6 +434,24 @@ const Register = () => {
                   placeholder="10"
                 />
               </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Location *
+                </label>
+                <input
+                  type="text"
+                  name="location"
+                  value={formData.location}
+                  onChange={handleChange}
+                  className="input-modern"
+                  placeholder="e.g., Mumbai, Maharashtra"
+                  required
+                />
+                <p className="text-sm text-gray-500 mt-1">
+                  Please include city and state/country
+                </p>
+              </div>
             </div>
 
             <div>
@@ -402,20 +465,6 @@ const Register = () => {
                 onChange={handleChange}
                 className="input-modern"
                 placeholder="e.g., Python, Writing, Design, Tutoring"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Location
-              </label>
-              <input
-                type="text"
-                name="location"
-                value={formData.location}
-                onChange={handleChange}
-                className="input-modern"
-                placeholder="City, State"
               />
             </div>
 
@@ -439,7 +488,13 @@ const Register = () => {
 
             <button
               type="submit"
-              disabled={loading || !passwordsMatch || passwordStrength.score < 40}
+              disabled={
+                loading || 
+                !passwordsMatch || 
+                passwordStrength.score < 40 || 
+                !formData.role || 
+                !formData.location.trim()
+              }
               className="btn-primary w-full flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (

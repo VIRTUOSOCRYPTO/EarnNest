@@ -77,12 +77,21 @@ const Profile = () => {
         }
       });
 
-      // Fetch updated user data
+      console.log('Photo upload response:', response.data);
+
+      // Immediately update user with new photo URL from response
+      if (response.data.photo_url) {
+        const updatedUser = { ...user, profile_photo: response.data.photo_url };
+        updateUser(updatedUser);
+      }
+
+      // Also fetch fresh user data to ensure consistency
       const userResponse = await axios.get(`${API}/user/profile`);
       updateUser(userResponse.data);
       
     } catch (error) {
       console.error('Error uploading photo:', error);
+      alert('Error uploading photo. Please try again.');
     } finally {
       setPhotoLoading(false);
     }
@@ -118,10 +127,24 @@ const Profile = () => {
                       src={`${BACKEND_URL}${user.profile_photo}`}
                       alt="Profile"
                       className="w-full h-full object-cover"
+                      onError={(e) => {
+                        console.error('Error loading profile image:', e.target.src);
+                        e.target.style.display = 'none';
+                      }}
+                      onLoad={() => {
+                        console.log('Profile image loaded successfully:', `${BACKEND_URL}${user.profile_photo}`);
+                      }}
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-emerald-400 to-green-500">
                       <UserIcon className="w-16 h-16 text-white" />
+                    </div>
+                  )}
+                  {user?.profile_photo && (
+                    <div className="absolute inset-0 w-32 h-32 rounded-full overflow-hidden bg-gray-100 border-4 border-white shadow-lg" style={{ display: 'none' }}>
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-emerald-400 to-green-500">
+                        <UserIcon className="w-16 h-16 text-white" />
+                      </div>
                     </div>
                   )}
                 </div>

@@ -7,7 +7,7 @@ import './App.css';
 import Dashboard from './components/Dashboard';
 import Login from './components/Login';
 import Register from './components/Register';
-import Transactions from './components/Transactions';
+import Transaction from './components/Transaction';
 import Hustles from './components/Hustles';
 import Analytics from './components/Analytics';
 import Profile from './components/Profile';
@@ -127,7 +127,7 @@ function App() {
             />
             <Route 
               path="/transactions" 
-              element={user ? <Transactions /> : <Navigate to="/login" />} 
+              element={user ? <Transaction /> : <Navigate to="/login" />} 
             />
             <Route 
               path="/hustles" 

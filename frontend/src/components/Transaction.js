@@ -17,6 +17,9 @@ const Transactions = () => {
   const [transactions, setTransactions] = useState([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [budgetWarning, setBudgetWarning] = useState('');
+  const [budgetInfo, setBudgetInfo] = useState({});
   const [isMultiCategory, setIsMultiCategory] = useState(false);
   const [formData, setFormData] = useState({
     type: 'income',
@@ -56,8 +59,37 @@ const Transactions = () => {
     }
   };
 
+  const checkCategoryBudget = async (category) => {
+    try {
+      const response = await axios.get(`${API}/budgets/category/${category}`);
+      setBudgetInfo(prev => ({
+        ...prev,
+        [category]: response.data
+      }));
+      return response.data;
+    } catch (error) {
+      console.error('Error checking budget:', error);
+      return null;
+    }
+  };
+
+  const validateExpenseBudget = async (category, amount) => {
+    const budget = await checkCategoryBudget(category);
+    if (!budget || !budget.has_budget) {
+      return `No budget allocated for '${category}' category. Please allocate budget first.`;
+    }
+    
+    if (amount > budget.remaining_amount) {
+      return `No money, you reached the limit! Remaining budget for '${category}': ₹${budget.remaining_amount.toFixed(2)}, but you're trying to spend ₹${amount.toFixed(2)}`;
+    }
+    
+    return null; // No error
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSubmitting(true);
+    setBudgetWarning('');
     
     try {
       if (isMultiCategory) {
@@ -65,8 +97,21 @@ const Transactions = () => {
         const totalCategoryAmount = Object.values(multiCategoryData.categories).reduce((sum, amount) => sum + (parseFloat(amount) || 0), 0);
         
         if (Math.abs(totalCategoryAmount - parseFloat(multiCategoryData.total_amount)) > 0.01) {
-          alert(`Category amounts (${formatCurrency(totalCategoryAmount)}) don't match total amount (${formatCurrency(parseFloat(multiCategoryData.total_amount))})`);
+          setBudgetWarning(`Category amounts (${formatCurrency(totalCategoryAmount)}) don't match total amount (${formatCurrency(parseFloat(multiCategoryData.total_amount))})`);
           return;
+        }
+
+        // Validate budget for each expense category
+        if (multiCategoryData.type === 'expense') {
+          for (const [category, amount] of Object.entries(multiCategoryData.categories)) {
+            if (amount && parseFloat(amount) > 0) {
+              const error = await validateExpenseBudget(category, parseFloat(amount));
+              if (error) {
+                setBudgetWarning(error);
+                return;
+              }
+            }
+          }
         }
 
         // Create separate transactions for each category
@@ -99,6 +144,15 @@ const Transactions = () => {
           amount: parseFloat(formData.amount)
         };
 
+        // Validate budget for single expense
+        if (formData.type === 'expense') {
+          const error = await validateExpenseBudget(formData.category, parseFloat(formData.amount));
+          if (error) {
+            setBudgetWarning(error);
+            return;
+          }
+        }
+
         await axios.post(`${API}/transactions`, submitData);
         
         // Reset single form
@@ -113,11 +167,17 @@ const Transactions = () => {
       }
 
       setShowAddForm(false);
-      setIsMultiCategory(false);
       fetchTransactions();
+      
     } catch (error) {
-      console.error('Error adding transaction:', error);
-      alert('Error adding transaction. Please try again.');
+      console.error('Error creating transaction:', error);
+      if (error.response?.data?.detail) {
+        setBudgetWarning(error.response.data.detail);
+      } else {
+        setBudgetWarning('Failed to create transaction. Please try again.');
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -127,6 +187,11 @@ const Transactions = () => {
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+    
+    // Check budget when expense category is selected
+    if (name === 'category' && formData.type === 'expense' && value) {
+      checkCategoryBudget(value);
+    }
   };
 
   const handleMultiCategoryChange = (field, value) => {
@@ -233,6 +298,12 @@ const Transactions = () => {
                   </p>
                 </div>
 
+                {budgetWarning && (
+                  <div className="bg-red-50 border border-red-200 p-4 rounded-lg">
+                    <p className="text-sm text-red-700">{budgetWarning}</p>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -324,15 +395,21 @@ const Transactions = () => {
                   <button
                     type="submit"
                     className="btn-primary flex-1"
-                    disabled={Math.abs(calculateMultiCategoryTotal() - (parseFloat(multiCategoryData.total_amount) || 0)) > 0.01}
+                    disabled={submitting || Math.abs(calculateMultiCategoryTotal() - (parseFloat(multiCategoryData.total_amount) || 0)) > 0.01}
                   >
-                    Add Multi-Category Transaction
+                    {submitting ? 'Adding...' : 'Add Multi-Category Transaction'}
                   </button>
                 </div>
               </form>
             ) : (
               /* Single Transaction Form */
               <form onSubmit={handleSubmit} className="space-y-4">
+                {budgetWarning && (
+                  <div className="bg-red-50 border border-red-200 p-4 rounded-lg">
+                    <p className="text-sm text-red-700">{budgetWarning}</p>
+                  </div>
+                )}
+                
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Type
@@ -381,6 +458,35 @@ const Transactions = () => {
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
                   </select>
+                  
+                  {/* Budget Information Display */}
+                  {formData.type === 'expense' && formData.category && budgetInfo[formData.category] && (
+                    <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="text-xs font-semibold text-blue-800 mb-1">Budget Status for {formData.category}</div>
+                      {budgetInfo[formData.category].has_budget ? (
+                        <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div>
+                            <span className="text-gray-600">Allocated:</span>
+                            <div className="font-medium">{formatCurrency(budgetInfo[formData.category].allocated_amount)}</div>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Spent:</span>
+                            <div className="font-medium text-red-600">{formatCurrency(budgetInfo[formData.category].spent_amount)}</div>
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Remaining:</span>
+                            <div className={`font-medium ${budgetInfo[formData.category].remaining_amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {formatCurrency(budgetInfo[formData.category].remaining_amount)}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-orange-600">
+                          No budget allocated for this category. Please allocate budget first.
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -438,8 +544,9 @@ const Transactions = () => {
                   <button
                     type="submit"
                     className="btn-primary flex-1"
+                    disabled={submitting}
                   >
-                    Add Transaction
+                    {submitting ? 'Adding...' : 'Add Transaction'}
                   </button>
                 </div>
               </form>

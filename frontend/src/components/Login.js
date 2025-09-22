@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../App';
@@ -8,7 +8,6 @@ import {
   ShieldCheckIcon,
   ExclamationTriangleIcon,
   KeyIcon,
-  LockClosedIcon,
   CheckCircleIcon
 } from '@heroicons/react/24/outline';
 
@@ -24,29 +23,16 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState('');
   const [resetData, setResetData] = useState({
     email: '',
-    reset_code: '',
     new_password: '',
     confirm_password: ''
   });
-  const [forgotLoading, setForgotLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
-  const [resendCooldown, setResendCooldown] = useState(0);
   
   const { login } = useAuth();
-
-  // Resend cooldown timer
-  useEffect(() => {
-    if (resendCooldown > 0) {
-      const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [resendCooldown]);
 
   const handleChange = (e) => {
     setFormData({
@@ -71,37 +57,12 @@ const Login = () => {
       if (error.response?.status === 423) {
         setError('Account temporarily locked due to multiple failed login attempts. Please try again later or reset your password.');
       } else if (error.response?.status === 401) {
-        const detail = error.response.data?.detail;
-        if (detail === 'Please verify your email before logging in') {
-          setError('Please verify your email before logging in. Check your inbox for the verification code.');
-        } else {
-          setError('Invalid email or password. Please check your credentials and try again.');
-        }
+        setError('Invalid email or password. Please check your credentials and try again.');
       } else {
         setError('Login failed. Please try again.');
       }
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleForgotPassword = async (e) => {
-    e.preventDefault();
-    setForgotLoading(true);
-    setError('');
-    setSuccessMessage('');
-
-    try {
-      await axios.post(`${API}/auth/forgot-password`, { email: forgotEmail });
-      setSuccessMessage('Reset code sent to your email if the account exists.');
-      setResetData({ ...resetData, email: forgotEmail });
-      setShowForgotPassword(false);
-      setShowResetPassword(true);
-      setResendCooldown(60);
-    } catch (error) {
-      setError('Failed to send reset code. Please try again.');
-    } finally {
-      setForgotLoading(false);
     }
   };
 
@@ -124,14 +85,12 @@ const Login = () => {
     try {
       await axios.post(`${API}/auth/reset-password`, {
         email: resetData.email,
-        reset_code: resetData.reset_code,
         new_password: resetData.new_password
       });
       setSuccessMessage('Password reset successfully! You can now log in with your new password.');
       setShowResetPassword(false);
       setResetData({
         email: '',
-        reset_code: '',
         new_password: '',
         confirm_password: ''
       });
@@ -142,85 +101,6 @@ const Login = () => {
     }
   };
 
-  const handleResendResetCode = async () => {
-    if (resendCooldown > 0) return;
-
-    try {
-      await axios.post(`${API}/auth/forgot-password`, { email: resetData.email });
-      setSuccessMessage('New reset code sent to your email.');
-      setResendCooldown(60);
-    } catch (error) {
-      setError('Failed to resend reset code.');
-    }
-  };
-
-  if (showForgotPassword) {
-    return (
-      <div className="min-h-screen flex items-center justify-center px-4">
-        <div className="max-w-md w-full">
-          <div className="form-container fade-in">
-            <div className="text-center mb-8">
-              <div className="flex items-center justify-center mb-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center">
-                  <KeyIcon className="w-6 h-6 text-white" />
-                </div>
-              </div>
-              <h1 className="text-4xl font-bold gradient-text mb-2">Forgot Password</h1>
-              <p className="text-gray-600">Enter your email to receive a reset code</p>
-            </div>
-
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 flex items-center">
-                <ExclamationTriangleIcon className="w-5 h-5 mr-2" />
-                {error}
-              </div>
-            )}
-
-            {successMessage && (
-              <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-6 flex items-center">
-                <CheckCircleIcon className="w-5 h-5 mr-2" />
-                {successMessage}
-              </div>
-            )}
-
-            <form onSubmit={handleForgotPassword} className="space-y-6">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  value={forgotEmail}
-                  onChange={(e) => setForgotEmail(e.target.value)}
-                  className="input-modern"
-                  placeholder="Enter your email"
-                  required
-                />
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowForgotPassword(false)}
-                  className="btn-secondary flex-1"
-                >
-                  Back to Login
-                </button>
-                <button
-                  type="submit"
-                  disabled={forgotLoading}
-                  className="btn-primary flex-1"
-                >
-                  {forgotLoading ? <div className="spinner"></div> : 'Send Reset Code'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   if (showResetPassword) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
@@ -229,11 +109,11 @@ const Login = () => {
             <div className="text-center mb-8">
               <div className="flex items-center justify-center mb-4">
                 <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center">
-                  <LockClosedIcon className="w-6 h-6 text-white" />
+                  <KeyIcon className="w-6 h-6 text-white" />
                 </div>
               </div>
               <h1 className="text-4xl font-bold gradient-text mb-2">Reset Password</h1>
-              <p className="text-gray-600">Enter the code sent to your email</p>
+              <p className="text-gray-600">Enter your email and new password</p>
             </div>
 
             {error && (
@@ -253,15 +133,14 @@ const Login = () => {
             <form onSubmit={handleResetPassword} className="space-y-6">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Reset Code
+                  Email Address
                 </label>
                 <input
-                  type="text"
-                  value={resetData.reset_code}
-                  onChange={(e) => setResetData({...resetData, reset_code: e.target.value})}
-                  className="input-modern text-center text-xl tracking-widest"
-                  placeholder="000000"
-                  maxLength="6"
+                  type="email"
+                  value={resetData.email}
+                  onChange={(e) => setResetData({...resetData, email: e.target.value})}
+                  className="input-modern"
+                  placeholder="Enter your email"
                   required
                 />
               </div>
@@ -294,25 +173,23 @@ const Login = () => {
                 />
               </div>
 
-              <button
-                type="submit"
-                disabled={resetLoading}
-                className="btn-primary w-full"
-              >
-                {resetLoading ? <div className="spinner"></div> : 'Reset Password'}
-              </button>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowResetPassword(false)}
+                  className="btn-secondary flex-1"
+                >
+                  Back to Login
+                </button>
+                <button
+                  type="submit"
+                  disabled={resetLoading}
+                  className="btn-primary flex-1"
+                >
+                  {resetLoading ? <div className="spinner"></div> : 'Reset Password'}
+                </button>
+              </div>
             </form>
-
-            <div className="text-center mt-6">
-              <p className="text-gray-600 mb-4">Didn't receive the code?</p>
-              <button
-                onClick={handleResendResetCode}
-                disabled={resendCooldown > 0}
-                className="text-emerald-600 font-semibold hover:text-emerald-700 disabled:text-gray-400"
-              >
-                {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Code'}
-              </button>
-            </div>
           </div>
         </div>
       </div>
@@ -406,10 +283,10 @@ const Login = () => {
 
               <button
                 type="button"
-                onClick={() => setShowForgotPassword(true)}
+                onClick={() => setShowResetPassword(true)}
                 className="text-sm text-emerald-600 font-semibold hover:text-emerald-700"
               >
-                Forgot password?
+                Reset password?
               </button>
             </div>
 

@@ -6,7 +6,7 @@ import time
 import io
 
 class EarnWiseAPITester:
-    def __init__(self, base_url="https://moneymojo.preview.emergentagent.com/api"):
+    def __init__(self, base_url="https://secure-earnnest.preview.emergentagent.com/api"):
         self.base_url = base_url
         self.token = None
         self.user_id = None

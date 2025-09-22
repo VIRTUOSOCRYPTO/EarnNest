@@ -1,4 +1,11 @@
-MONGO_URL="mongodb://localhost:27017"
-DB_NAME="moneymojo_db"
-CORS_ORIGINS="*"
-EMERGENT_LLM_KEY=sk-emergent-11aA6E9353b036bC02
+fastapi==0.115.6
+motor==3.6.0
+python-dotenv==1.0.1
+bcrypt==4.2.1
+PyJWT==2.10.1
+pydantic[email]==2.10.6
+python-multipart==0.0.19
+emergentintegrations
+slowapi==0.1.9
+passlib==1.7.4
+email-validator==2.2.0

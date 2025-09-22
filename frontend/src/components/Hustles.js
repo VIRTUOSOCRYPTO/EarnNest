@@ -28,6 +28,7 @@ const Hustles = () => {
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [activeTab, setActiveTab] = useState('browse'); // 'browse', 'my-hustles', 'my-applications'
+  const [adminHustles, setAdminHustles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showApplicationForm, setShowApplicationForm] = useState(false);
@@ -75,7 +76,8 @@ const Hustles = () => {
       if (activeTab === 'browse') {
         requests.push(
           axios.get(`${API}/hustles/recommendations`),
-          axios.get(`${API}/hustles/user-posted`)
+          axios.get(`${API}/hustles/user-posted`),
+          axios.get(`${API}/hustles/admin-posted`)
         );
       } else if (activeTab === 'my-applications') {
         requests.push(axios.get(`${API}/hustles/my-applications`));
@@ -87,6 +89,7 @@ const Hustles = () => {
       if (activeTab === 'browse') {
         setAiHustles(responses[1].data);
         setUserHustles(responses[2].data);
+        setAdminHustles(responses[3].data);
       } else if (activeTab === 'my-applications') {
         setMyApplications(responses[1].data);
       }
@@ -159,6 +162,50 @@ const Hustles = () => {
     }
   };
 
+  const getContactType = (contactInfo) => {
+    if (!contactInfo) return 'unknown';
+    
+    // Email pattern
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (emailRegex.test(contactInfo)) {
+      return 'email';
+    }
+    
+    // Phone pattern (international and Indian)
+    const phoneRegex = /^[\+]?[1-9][\d]{3,14}$/;
+    if (phoneRegex.test(contactInfo.replace(/[\s\-\(\)]/g, ''))) {
+      return 'phone';
+    }
+    
+    // URL pattern
+    const urlRegex = /^https?:\/\/[^\s]+$/;
+    if (urlRegex.test(contactInfo)) {
+      return 'website';
+    }
+    
+    return 'unknown';
+  };
+
+  const handleContactClick = (contactInfo, contactType = null) => {
+    const type = contactType || getContactType(contactInfo);
+    
+    switch (type) {
+      case 'email':
+        window.location.href = `mailto:${contactInfo}`;
+        break;
+      case 'phone':
+        window.location.href = `tel:${contactInfo}`;
+        break;
+      case 'website':
+        window.open(contactInfo, '_blank', 'noopener,noreferrer');
+        break;
+      default:
+        // Fallback - copy to clipboard
+        navigator.clipboard.writeText(contactInfo);
+        alert('Contact information copied to clipboard!');
+    }
+  };
+
   const getMatchScoreColor = (score) => {
     if (score >= 80) return 'text-green-600';
     if (score >= 60) return 'text-yellow-600';
@@ -179,9 +226,13 @@ const Hustles = () => {
   };
 
   const allHustles = [...aiHustles, ...userHustles];
+  const allHustlesWithAdmin = [...aiHustles, ...userHustles, ...adminHustles];
   const filteredHustles = selectedCategory === 'all' 
     ? allHustles 
     : allHustles.filter(hustle => hustle.category === selectedCategory);
+  const filteredAdminHustles = selectedCategory === 'all'
+    ? adminHustles
+    : adminHustles.filter(hustle => hustle.category === selectedCategory);
 
   if (loading) {
     return (
@@ -277,6 +328,124 @@ const Hustles = () => {
               <PlusIcon className="w-5 h-5" />
               Post a Side Hustle
             </button>
+          </div>
+
+          {/* Admin-Shared Hustles Section */}
+          {filteredAdminHustles.length > 0 && (
+            <div className="mb-8">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <StarIcon className="w-6 h-6 text-purple-600" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">Featured Opportunities</h2>
+                  <p className="text-gray-600">Curated by EarnWise team</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                {filteredAdminHustles.map((hustle, index) => {
+                  const CategoryIcon = categoryIcons[hustle.category] || BriefcaseIcon;
+                  
+                  return (
+                    <div
+                      key={hustle.id}
+                      className="hustle-card slide-up border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-white"
+                      style={{ animationDelay: `${index * 0.1}s` }}
+                    >
+                      {/* Header */}
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="hustle-category bg-purple-100 text-purple-700">
+                          <CategoryIcon className="w-4 h-4" />
+                          {categories.find(c => c.name === hustle.category)?.display || hustle.category}
+                        </div>
+                        
+                        <div className="flex items-center gap-1">
+                          <StarIcon className="w-4 h-4 text-purple-500 fill-current" />
+                          <span className="text-xs font-semibold text-purple-600">Featured</span>
+                        </div>
+                      </div>
+
+                      {/* Title and Description */}
+                      <h3 className="text-lg font-bold text-gray-900 mb-2">{hustle.title}</h3>
+                      <p className="text-gray-600 text-sm mb-4 line-clamp-3">{hustle.description}</p>
+
+                      {/* Pay and Time */}
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-1">
+                          <CurrencyDollarIcon className="w-4 h-4 text-emerald-500" />
+                          <span className="hustle-pay">
+                            {formatCurrency(hustle.estimated_pay || hustle.pay_rate)}
+                          </span>
+                          <span className="text-sm text-gray-500">
+                            /{hustle.pay_type || 'estimated'}
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center gap-1 text-gray-500">
+                          <ClockIcon className="w-4 h-4" />
+                          <span className="text-sm">{hustle.time_commitment}</span>
+                        </div>
+                      </div>
+
+                      {/* Skills and Details */}
+                      <div className="mb-4">
+                        <div className="flex flex-wrap gap-1 mb-2">
+                          {(hustle.required_skills || []).slice(0, 3).map((skill, idx) => (
+                            <span
+                              key={idx}
+                              className="text-xs bg-purple-100 text-purple-600 px-2 py-1 rounded-full"
+                            >
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Bottom Section */}
+                      <div className="flex items-center justify-between pt-4 border-t border-purple-100">
+                        <span className={`text-xs px-2 py-1 rounded-full font-medium ${getDifficultyColor(hustle.difficulty_level)}`}>
+                          {hustle.difficulty_level}
+                        </span>
+                        
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs bg-purple-100 text-purple-600 px-2 py-1 rounded-full font-medium">
+                            {hustle.platform}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Apply Button */}
+                      {hustle.application_link ? (
+                        <button
+                          onClick={() => handleContactClick(hustle.application_link)}
+                          className="btn-primary w-full mt-4 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700"
+                        >
+                          Apply via {getContactType(hustle.application_link) === 'email' ? 'Email' : 
+                                    getContactType(hustle.application_link) === 'phone' ? 'Phone' : 
+                                    getContactType(hustle.application_link) === 'website' ? hustle.platform : 'Contact'}
+                          <ArrowTopRightOnSquareIcon className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleContactClick(hustle.contact_info)}
+                          className="btn-primary w-full mt-4 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700"
+                        >
+                          Contact Now
+                          <ArrowTopRightOnSquareIcon className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Regular Hustles Section */}
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">All Opportunities</h2>
+            <p className="text-gray-600">AI-recommended and community-shared hustles</p>
           </div>
 
           {/* Hustles Grid */}
@@ -385,15 +554,25 @@ const Hustles = () => {
 
                     {/* Apply Button */}
                     {hustle.application_link ? (
-                      <a
-                        href={hustle.application_link}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        onClick={() => handleContactClick(hustle.application_link)}
                         className="btn-primary w-full mt-4 flex items-center justify-center gap-2"
                       >
-                        Apply on {hustle.platform}
+                        Apply via {getContactType(hustle.application_link) === 'email' ? 'Email' : 
+                                  getContactType(hustle.application_link) === 'phone' ? 'Phone' : 
+                                  getContactType(hustle.application_link) === 'website' ? hustle.platform : 'Contact'}
                         <ArrowTopRightOnSquareIcon className="w-4 h-4" />
-                      </a>
+                      </button>
+                    ) : hustle.contact_info ? (
+                      <button
+                        onClick={() => handleContactClick(hustle.contact_info)}
+                        className="btn-primary w-full mt-4 flex items-center justify-center gap-2"
+                      >
+                        Contact {getContactType(hustle.contact_info) === 'email' ? 'via Email' : 
+                               getContactType(hustle.contact_info) === 'phone' ? 'via Phone' : 
+                               getContactType(hustle.contact_info) === 'website' ? 'via Website' : 'Now'}
+                        <ArrowTopRightOnSquareIcon className="w-4 h-4" />
+                      </button>
                     ) : (
                       <button 
                         onClick={() => {

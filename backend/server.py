@@ -1,19 +1,23 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, File, UploadFile
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, File, UploadFile, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
-from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
+from pathlib import Path
 import os
 import logging
-from pathlib import Path
-from pydantic import BaseModel, Field, EmailStr
-from typing import List, Optional, Dict, Any
+import shutil
 import uuid
 from datetime import datetime, timezone, timedelta
-import bcrypt
-import jwt
-import shutil
+from typing import List, Optional, Dict, Any
+
+# Import our modules
+from models import *
+from security import *
+from database import *
+from email_service import email_service
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 ROOT_DIR = Path(__file__).parent
@@ -23,22 +27,19 @@ load_dotenv(ROOT_DIR / '.env')
 UPLOADS_DIR = ROOT_DIR / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)
 
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
-
-# JWT Configuration
-JWT_SECRET = "earnwise-secret-key-2024"
-JWT_ALGORITHM = "HS256"
-
-# Create the main app without a prefix
-app = FastAPI(title="EarnWise - Student Finance & Side Hustle Platform")
+# Create the main app
+app = FastAPI(
+    title="EarnWise - Student Finance & Side Hustle Platform",
+    description="Production-ready platform for student financial management and side hustles",
+    version="2.0.0",
+    docs_url="/api/docs" if os.environ.get("ENVIRONMENT") != "production" else None,
+    redoc_url="/api/redoc" if os.environ.get("ENVIRONMENT") != "production" else None
+)
 
 # Serve static files for uploads
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
-# Create a router with the /api prefix
+# Create API router
 api_router = APIRouter(prefix="/api")
 
 # Security
@@ -47,166 +48,68 @@ security = HTTPBearer()
 # LLM Chat instance
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 
-# Pydantic Models
-class User(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    email: EmailStr
-    full_name: str
-    student_level: str  # "undergraduate", "graduate", "high_school"
-    skills: List[str] = []
-    availability_hours: int = 10  # hours per week
-    location: Optional[str] = None
-    bio: Optional[str] = None
-    profile_photo: Optional[str] = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    total_earnings: float = 0.0
-    current_streak: int = 0
-    achievements: List[str] = []
+# Rate limiting setup
+app.state.limiter = limiter
 
-class UserCreate(BaseModel):
-    email: EmailStr
-    password: str
-    full_name: str
-    student_level: str
-    skills: List[str] = []
-    availability_hours: int = 10
-    location: Optional[str] = None
-    bio: Optional[str] = None
+# Middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+)
 
-class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
+# Trust only specific hosts in production
+if os.environ.get("ENVIRONMENT") == "production":
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=os.environ.get("ALLOWED_HOSTS", "localhost").split(',')
+    )
 
-class UserUpdate(BaseModel):
-    full_name: Optional[str] = None
-    skills: Optional[List[str]] = None
-    availability_hours: Optional[int] = None
-    location: Optional[str] = None
-    bio: Optional[str] = None
-    student_level: Optional[str] = None
+# Add rate limiting error handler
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    response = JSONResponse(
+        status_code=429,
+        content={"detail": f"Rate limit exceeded: {exc.detail}"}
+    )
+    response = request.app.state.limiter._inject_headers(response, request.state.view_rate_limit)
+    return response
 
-class Transaction(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    user_id: str
-    type: str  # "income" or "expense"
-    amount: float
-    category: str
-    description: str
-    source: Optional[str] = None  # for income: "hustle", "part_time", "scholarship", etc.
-    date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    is_hustle_related: bool = False
-
-class TransactionCreate(BaseModel):
-    type: str
-    amount: float
-    category: str
-    description: str
-    source: Optional[str] = None
-    is_hustle_related: bool = False
-
-class UserHustle(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    created_by: str  # user_id
-    title: str
-    description: str
-    category: str  # "tutoring", "freelance", "content_creation", "delivery", "micro_tasks"
-    pay_rate: float
-    pay_type: str  # "hourly", "fixed", "per_task"
-    time_commitment: str
-    required_skills: List[str]
-    difficulty_level: str  # "beginner", "intermediate", "advanced"
-    location: Optional[str] = None
-    is_remote: bool = True
-    contact_info: str
-    application_deadline: Optional[datetime] = None
-    max_applicants: Optional[int] = None
-    status: str = "active"  # "active", "closed", "completed"
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    applicants: List[str] = []  # user_ids who applied
-
-class UserHustleCreate(BaseModel):
-    title: str
-    description: str
-    category: str
-    pay_rate: float
-    pay_type: str
-    time_commitment: str
-    required_skills: List[str]
-    difficulty_level: str
-    location: Optional[str] = None
-    is_remote: bool = True
-    contact_info: str
-    application_deadline: Optional[datetime] = None
-    max_applicants: Optional[int] = None
-
-class HustleApplication(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    hustle_id: str
-    applicant_id: str
-    applicant_name: str
-    applicant_email: str
-    cover_message: str
-    applied_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    status: str = "pending"  # "pending", "accepted", "rejected"
-
-class HustleApplicationCreate(BaseModel):
-    cover_message: str
-
-class HustleOpportunity(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    title: str
-    description: str
-    category: str  # "tutoring", "freelance", "content_creation", "delivery", "micro_tasks"
-    estimated_pay: float
-    time_commitment: str
-    required_skills: List[str]
-    difficulty_level: str  # "beginner", "intermediate", "advanced"
-    platform: str
-    application_link: Optional[str] = None
-    ai_recommended: bool = False
-    match_score: float = 0.0
-
-class Budget(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    user_id: str
-    category: str
-    allocated_amount: float
-    spent_amount: float = 0.0
-    month: str  # "2024-01"
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class BudgetCreate(BaseModel):
-    category: str
-    allocated_amount: float
-    month: str
-
-# Helper Functions
-def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-
-def verify_password(password: str, hashed: str) -> bool:
-    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
-
-def create_jwt_token(user_id: str) -> str:
-    payload = {
-        "user_id": user_id,
-        "exp": datetime.now(timezone.utc) + timedelta(days=7)
-    }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
-
-def verify_jwt_token(token: str) -> Optional[str]:
-    try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        return payload.get("user_id")
-    except jwt.ExpiredSignatureError:
-        return None
-    except jwt.InvalidTokenError:
-        return None
+# Global exception handler for better error messages
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Global exception: {str(exc)}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error. Please try again later."}
+    )
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
+    """Get current authenticated user"""
     user_id = verify_jwt_token(credentials.credentials)
     if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    # Check if user exists and is active
+    user = await get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    
+    if not user.get("is_active", True):
+        raise HTTPException(status_code=401, detail="Account deactivated")
+    
+    if not user.get("email_verified", False):
+        raise HTTPException(status_code=401, detail="Email not verified")
+    
+    return user_id
+
+async def get_current_admin(user_id: str = Depends(get_current_user)) -> str:
+    """Get current authenticated admin user"""
+    user = await get_user_by_id(user_id)
+    if not user or not user.get("is_admin", False):
+        raise HTTPException(status_code=403, detail="Admin access required")
     return user_id
 
 async def get_enhanced_ai_hustle_recommendations(user_skills: List[str], availability: int, recent_earnings: float, location: str = None) -> List[Dict]:
@@ -304,7 +207,7 @@ async def get_financial_insights(user_id: str) -> Dict[str, Any]:
     """Generate AI-powered financial insights"""
     try:
         # Get user's recent transactions
-        transactions = await db.transactions.find({"user_id": user_id}).sort("date", -1).limit(50).to_list(50)
+        transactions = await get_user_transactions(user_id, limit=50)
         
         if not transactions:
             return {"insights": ["Start tracking your expenses to get personalized insights!"]}
@@ -338,56 +241,305 @@ async def get_financial_insights(user_id: str) -> Dict[str, Any]:
 
 # Authentication Routes
 @api_router.post("/auth/register")
-async def register_user(user_data: UserCreate):
-    # Check if user exists
-    existing_user = await db.users.find_one({"email": user_data.email})
-    if existing_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
-    # Hash password and create user
-    hashed_password = hash_password(user_data.password)
-    user_dict = user_data.dict()
-    del user_dict["password"]
-    
-    user = User(**user_dict)
-    user_doc = user.dict()
-    user_doc["password_hash"] = hashed_password
-    
-    await db.users.insert_one(user_doc)
-    
-    # Create JWT token
-    token = create_jwt_token(user.id)
-    
-    return {
-        "message": "User registered successfully",
-        "token": token,
-        "user": user.dict()
-    }
+@limiter.limit("5/minute")
+async def register_user(request: Request, user_data: UserCreate):
+    """Register new user with email verification"""
+    try:
+        # Check if user exists
+        existing_user = await get_user_by_email(user_data.email)
+        if existing_user:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        
+        # Validate and sanitize input
+        user_dict = user_data.dict()
+        user_dict["full_name"] = sanitize_input(user_dict["full_name"])
+        user_dict["bio"] = sanitize_input(user_dict.get("bio", ""))
+        user_dict["location"] = sanitize_input(user_dict.get("location", ""))
+        
+        # Hash password and create user
+        hashed_password = hash_password(user_data.password)
+        del user_dict["password"]
+        
+        user = User(**user_dict)
+        user_doc = user.dict()
+        user_doc["password_hash"] = hashed_password
+        user_doc["email_verified"] = False
+        user_doc["is_active"] = False  # Activate only after email verification
+        
+        await create_user(user_doc)
+        
+        # Generate and send verification code
+        verification_code = generate_verification_code()
+        expires_at = datetime.now(timezone.utc) + EMAIL_VERIFICATION_EXPIRY
+        
+        await store_verification_code(user_data.email, verification_code, expires_at)
+        await email_service.send_verification_email(user_data.email, verification_code)
+        
+        return {
+            "message": "Registration successful! Please check your email for verification code.",
+            "email": user_data.email,
+            "verification_required": True
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Registration error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Registration failed")
+
+@api_router.post("/auth/verify-email")
+@limiter.limit("10/minute")
+async def verify_email(request: Request, verification: EmailVerificationConfirm):
+    """Verify email with code"""
+    try:
+        # Get stored verification code
+        stored_verification = await get_verification_code(verification.email)
+        if not stored_verification:
+            raise HTTPException(status_code=400, detail="No verification code found")
+        
+        # Check if code matches and hasn't expired
+        if stored_verification["code"] != verification.verification_code:
+            raise HTTPException(status_code=400, detail="Invalid verification code")
+        
+        # Handle timezone comparison properly
+        expires_at = stored_verification["expires_at"]
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        
+        if datetime.now(timezone.utc) > expires_at:
+            await delete_verification_code(verification.email)
+            raise HTTPException(status_code=400, detail="Verification code expired")
+        
+        # Activate user account
+        user_doc = await get_user_by_email(verification.email)
+        if not user_doc:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        await update_user(
+            user_doc["id"],
+            {
+                "email_verified": True,
+                "is_active": True,
+                "last_login": datetime.now(timezone.utc)
+            }
+        )
+        
+        # Clean up verification code
+        await delete_verification_code(verification.email)
+        
+        # Get user and create token
+        user_doc = await get_user_by_email(verification.email)
+        if not user_doc:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Send welcome email
+        await email_service.send_welcome_email(verification.email, user_doc["full_name"])
+        
+        # Create JWT token
+        token = create_jwt_token(user_doc["id"])
+        
+        # Remove password hash from response
+        del user_doc["password_hash"]
+        user = User(**user_doc)
+        
+        return {
+            "message": "Email verified successfully!",
+            "token": token,
+            "user": user.dict()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Email verification error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Email verification failed")
+
+@api_router.post("/auth/resend-verification")
+@limiter.limit("3/minute")
+async def resend_verification(request: Request, email_request: EmailVerificationRequest):
+    """Resend verification email"""
+    try:
+        user = await get_user_by_email(email_request.email)
+        if not user:
+            raise HTTPException(status_code=400, detail="Email not found")
+        
+        if user.get("email_verified", False):
+            raise HTTPException(status_code=400, detail="Email already verified")
+        
+        # Generate new verification code
+        verification_code = generate_verification_code()
+        expires_at = datetime.now(timezone.utc) + EMAIL_VERIFICATION_EXPIRY
+        
+        await store_verification_code(email_request.email, verification_code, expires_at)
+        await email_service.send_verification_email(email_request.email, verification_code)
+        
+        return {"message": "Verification code sent successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Resend verification error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to resend verification")
 
 @api_router.post("/auth/login")
-async def login_user(login_data: UserLogin):
-    # Find user
-    user_doc = await db.users.find_one({"email": login_data.email})
-    if not user_doc or not verify_password(login_data.password, user_doc["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    
-    # Create JWT token
-    token = create_jwt_token(user_doc["id"])
-    
-    # Remove password hash from response
-    del user_doc["password_hash"]
-    user = User(**user_doc)
-    
-    return {
-        "message": "Login successful",
-        "token": token,
-        "user": user.dict()
-    }
+@limiter.limit("5/minute")
+async def login_user(request: Request, login_data: UserLogin):
+    """Login user with enhanced security"""
+    try:
+        # Find user
+        user_doc = await get_user_by_email(login_data.email)
+        if not user_doc:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+        # Check if account is locked
+        if is_account_locked(
+            user_doc.get("failed_login_attempts", 0),
+            user_doc.get("last_failed_login")
+        ):
+            remaining_time = get_lockout_remaining_time(user_doc.get("last_failed_login"))
+            raise HTTPException(
+                status_code=423,
+                detail=f"Account locked due to too many failed attempts. Try again in {remaining_time} minutes."
+            )
+        
+        # Verify password
+        if not verify_password(login_data.password, user_doc["password_hash"]):
+            # Increment failed login attempts
+            failed_attempts = user_doc.get("failed_login_attempts", 0) + 1
+            await update_user(
+                user_doc["id"],
+                {
+                    "failed_login_attempts": failed_attempts,
+                    "last_failed_login": datetime.now(timezone.utc)
+                }
+            )
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+        # Check if email is verified
+        if not user_doc.get("email_verified", False):
+            raise HTTPException(
+                status_code=401,
+                detail="Please verify your email before logging in"
+            )
+        
+        # Check if account is active
+        if not user_doc.get("is_active", True):
+            raise HTTPException(status_code=401, detail="Account deactivated")
+        
+        # Reset failed login attempts on successful login
+        await update_user(
+            user_doc["id"],
+            {
+                "failed_login_attempts": 0,
+                "last_failed_login": None,
+                "last_login": datetime.now(timezone.utc)
+            }
+        )
+        
+        # Create JWT token
+        token = create_jwt_token(user_doc["id"])
+        
+        # Remove password hash from response
+        del user_doc["password_hash"]
+        user = User(**user_doc)
+        
+        return {
+            "message": "Login successful",
+            "token": token,
+            "user": user.dict()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Login error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Login failed")
+
+@api_router.post("/auth/password-strength")
+async def check_password_strength_endpoint(request: Request, password_data: dict):
+    """Check password strength"""
+    password = password_data.get("password", "")
+    strength_info = check_password_strength(password)
+    return strength_info
+
+@api_router.post("/auth/forgot-password")
+@limiter.limit("3/minute")
+async def forgot_password(request: Request, email_request: EmailVerificationRequest):
+    """Send password reset code"""
+    try:
+        user = await get_user_by_email(email_request.email)
+        if not user:
+            # Don't reveal if email exists or not
+            return {"message": "If the email exists, a reset code has been sent"}
+        
+        # Generate reset code
+        reset_code = generate_verification_code()
+        expires_at = datetime.now(timezone.utc) + PASSWORD_RESET_EXPIRY
+        
+        await store_password_reset_code(email_request.email, reset_code, expires_at)
+        await email_service.send_password_reset_email(email_request.email, reset_code)
+        
+        return {"message": "If the email exists, a reset code has been sent"}
+        
+    except Exception as e:
+        logger.error(f"Forgot password error: {str(e)}")
+        return {"message": "If the email exists, a reset code has been sent"}
+
+@api_router.post("/auth/reset-password")
+@limiter.limit("5/minute")
+async def reset_password(request: Request, reset_data: PasswordResetConfirm):
+    """Reset password with code"""
+    try:
+        # Get stored reset code
+        stored_reset = await get_password_reset_code(reset_data.email)
+        if not stored_reset:
+            raise HTTPException(status_code=400, detail="No reset code found")
+        
+        # Check if code matches and hasn't expired
+        if stored_reset["code"] != reset_data.reset_code:
+            raise HTTPException(status_code=400, detail="Invalid reset code")
+        
+        # Handle timezone comparison properly
+        expires_at = stored_reset["expires_at"]
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        
+        if datetime.now(timezone.utc) > expires_at:
+            await delete_password_reset_code(reset_data.email)
+            raise HTTPException(status_code=400, detail="Reset code expired")
+        
+        # Update password
+        hashed_password = hash_password(reset_data.new_password)
+        user = await get_user_by_email(reset_data.email)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        await update_user(
+            user["id"], 
+            {
+                "password_hash": hashed_password,
+                "failed_login_attempts": 0,
+                "last_failed_login": None
+            }
+        )
+        
+        # Clean up reset code
+        await delete_password_reset_code(reset_data.email)
+        
+        return {"message": "Password reset successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Reset password error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Password reset failed")
 
 # User Routes
 @api_router.get("/user/profile", response_model=User)
-async def get_user_profile(user_id: str = Depends(get_current_user)):
-    user_doc = await db.users.find_one({"id": user_id})
+@limiter.limit("30/minute")
+async def get_user_profile(request: Request, user_id: str = Depends(get_current_user)):
+    """Get user profile"""
+    user_doc = await get_user_by_id(user_id)
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -395,80 +547,100 @@ async def get_user_profile(user_id: str = Depends(get_current_user)):
     return User(**user_doc)
 
 @api_router.put("/user/profile")
-async def update_user_profile(updated_data: UserUpdate, user_id: str = Depends(get_current_user)):
-    update_data = {k: v for k, v in updated_data.dict().items() if v is not None}
-    
-    if update_data:
-        await db.users.update_one({"id": user_id}, {"$set": update_data})
-    
-    return {"message": "Profile updated successfully"}
+@limiter.limit("10/minute")
+async def update_user_profile(request: Request, updated_data: UserUpdate, user_id: str = Depends(get_current_user)):
+    """Update user profile with validation"""
+    try:
+        update_data = {k: v for k, v in updated_data.dict().items() if v is not None}
+        
+        # Sanitize inputs
+        if "full_name" in update_data:
+            update_data["full_name"] = sanitize_input(update_data["full_name"])
+        if "bio" in update_data:
+            update_data["bio"] = sanitize_input(update_data["bio"])
+        if "location" in update_data:
+            update_data["location"] = sanitize_input(update_data["location"])
+        
+        if update_data:
+            await update_user(user_id, update_data)
+        
+        return {"message": "Profile updated successfully"}
+        
+    except Exception as e:
+        logger.error(f"Profile update error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Profile update failed")
 
 @api_router.post("/user/profile/photo")
-async def upload_profile_photo(file: UploadFile = File(...), user_id: str = Depends(get_current_user)):
-    # Validate file type
-    if not file.content_type.startswith('image/'):
-        raise HTTPException(status_code=400, detail="File must be an image")
-    
-    # Generate unique filename
-    file_extension = file.filename.split('.')[-1]
-    filename = f"profile_{user_id}_{uuid.uuid4()}.{file_extension}"
-    file_path = UPLOADS_DIR / filename
-    
+@limiter.limit("5/minute")
+async def upload_profile_photo(request: Request, file: UploadFile = File(...), user_id: str = Depends(get_current_user)):
+    """Upload profile photo with validation"""
     try:
+        # Validate file
+        validate_file_upload(file.filename, file.size)
+        
+        # Generate unique filename
+        file_extension = file.filename.split('.')[-1]
+        filename = f"profile_{user_id}_{uuid.uuid4()}.{file_extension}"
+        file_path = UPLOADS_DIR / filename
+        
         # Save file
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
         # Update user profile
         photo_url = f"/uploads/{filename}"
-        await db.users.update_one(
-            {"id": user_id}, 
-            {"$set": {"profile_photo": photo_url}}
-        )
+        await update_user(user_id, {"profile_photo": photo_url})
         
         return {"message": "Profile photo uploaded successfully", "photo_url": photo_url}
-    
+        
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error uploading file: {str(e)}")
+        logger.error(f"Photo upload error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Photo upload failed")
 
 # Transaction Routes
 @api_router.post("/transactions", response_model=Transaction)
-async def create_transaction(transaction_data: TransactionCreate, user_id: str = Depends(get_current_user)):
-    transaction_dict = transaction_data.dict()
-    transaction_dict["user_id"] = user_id
-    
-    transaction = Transaction(**transaction_dict)
-    await db.transactions.insert_one(transaction.dict())
-    
-    # Update user's total earnings if it's income
-    if transaction.type == "income":
-        await db.users.update_one(
-            {"id": user_id},
-            {"$inc": {"total_earnings": transaction.amount}}
-        )
-    
-    return transaction
+@limiter.limit("20/minute")
+async def create_transaction_endpoint(request: Request, transaction_data: TransactionCreate, user_id: str = Depends(get_current_user)):
+    """Create transaction with validation"""
+    try:
+        transaction_dict = transaction_data.dict()
+        transaction_dict["user_id"] = user_id
+        transaction_dict["description"] = sanitize_input(transaction_dict["description"])
+        transaction_dict["category"] = sanitize_input(transaction_dict["category"])
+        
+        transaction = Transaction(**transaction_dict)
+        await create_transaction(transaction.dict())
+        
+        # Update user's total earnings if it's income
+        if transaction.type == "income":
+            await db.users.update_one(
+                {"id": user_id},
+                {"$inc": {"total_earnings": transaction.amount}}
+            )
+        
+        return transaction
+        
+    except Exception as e:
+        logger.error(f"Transaction creation error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Transaction creation failed")
 
 @api_router.get("/transactions", response_model=List[Transaction])
-async def get_transactions(user_id: str = Depends(get_current_user), limit: int = 50):
-    transactions = await db.transactions.find({"user_id": user_id}).sort("date", -1).limit(limit).to_list(limit)
+@limiter.limit("30/minute")
+async def get_transactions_endpoint(request: Request, user_id: str = Depends(get_current_user), limit: int = 50, skip: int = 0):
+    """Get user transactions"""
+    transactions = await get_user_transactions(user_id, limit, skip)
     return [Transaction(**t) for t in transactions]
 
 @api_router.get("/transactions/summary")
-async def get_transaction_summary(user_id: str = Depends(get_current_user)):
+@limiter.limit("30/minute")
+async def get_transaction_summary_endpoint(request: Request, user_id: str = Depends(get_current_user)):
+    """Get transaction summary with large number support"""
     # Get current month transactions
-    current_month = datetime.now(timezone.utc).strftime("%Y-%m")
+    current_month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     
-    pipeline = [
-        {"$match": {"user_id": user_id, "date": {"$gte": datetime.strptime(current_month, "%Y-%m")}}},
-        {"$group": {
-            "_id": "$type",
-            "total": {"$sum": "$amount"},
-            "count": {"$sum": 1}
-        }}
-    ]
-    
-    results = await db.transactions.aggregate(pipeline).to_list(None)
+    results = await get_transaction_summary(user_id, current_month_start)
     
     summary = {"income": 0, "expense": 0, "income_count": 0, "expense_count": 0}
     for result in results:
@@ -484,9 +656,11 @@ async def get_transaction_summary(user_id: str = Depends(get_current_user)):
 
 # Hustle Routes
 @api_router.get("/hustles/recommendations")
-async def get_hustle_recommendations(user_id: str = Depends(get_current_user)):
+@limiter.limit("10/minute")
+async def get_hustle_recommendations_endpoint(request: Request, user_id: str = Depends(get_current_user)):
+    """Get AI-powered hustle recommendations"""
     # Get user profile
-    user_doc = await db.users.find_one({"id": user_id})
+    user_doc = await get_user_by_id(user_id)
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -518,70 +692,122 @@ async def get_hustle_recommendations(user_id: str = Depends(get_current_user)):
     return hustles
 
 @api_router.get("/hustles/user-posted")
-async def get_user_posted_hustles(user_id: str = Depends(get_current_user)):
+@limiter.limit("10/minute")
+async def get_user_posted_hustles_endpoint(request: Request, user_id: str = Depends(get_current_user)):
     """Get all user-posted hustles"""
-    hustles = await db.user_hustles.find({"status": "active"}).sort("created_at", -1).to_list(100)
+    hustles = await get_active_hustles()
     
     # Add creator info
     for hustle in hustles:
-        creator = await db.users.find_one({"id": hustle["created_by"]})
+        creator = await get_user_by_id(hustle["created_by"])
         if creator:
             hustle["creator_name"] = creator.get("full_name", "Anonymous")
             hustle["creator_photo"] = creator.get("profile_photo")
     
     return [UserHustle(**hustle) for hustle in hustles]
 
+@api_router.get("/hustles/admin-posted")
+@limiter.limit("10/minute")
+async def get_admin_posted_hustles_endpoint(request: Request, user_id: str = Depends(get_current_user)):
+    """Get admin-posted hustles"""
+    cursor = db.user_hustles.find({"is_admin_posted": True, "status": "active"}).sort("created_at", -1)
+    hustles = await cursor.to_list(100)
+    return [UserHustle(**hustle) for hustle in hustles]
+
 @api_router.post("/hustles/create", response_model=UserHustle)
-async def create_user_hustle(hustle_data: UserHustleCreate, user_id: str = Depends(get_current_user)):
+@limiter.limit("5/minute")
+async def create_user_hustle_endpoint(request: Request, hustle_data: UserHustleCreate, user_id: str = Depends(get_current_user)):
     """Create a new user-posted side hustle"""
-    hustle_dict = hustle_data.dict()
-    hustle_dict["created_by"] = user_id
-    
-    hustle = UserHustle(**hustle_dict)
-    await db.user_hustles.insert_one(hustle.dict())
-    
-    return hustle
+    try:
+        hustle_dict = hustle_data.dict()
+        hustle_dict["created_by"] = user_id
+        hustle_dict["title"] = sanitize_input(hustle_dict["title"])
+        hustle_dict["description"] = sanitize_input(hustle_dict["description"])
+        hustle_dict["contact_info"] = sanitize_input(hustle_dict["contact_info"])
+        
+        hustle = UserHustle(**hustle_dict)
+        await create_hustle(hustle.dict())
+        
+        return hustle
+        
+    except Exception as e:
+        logger.error(f"Hustle creation error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Hustle creation failed")
+
+@api_router.post("/hustles/admin/create", response_model=UserHustle)
+@limiter.limit("10/minute")
+async def create_admin_hustle(request: Request, hustle_data: AdminHustleCreate, admin_id: str = Depends(get_current_admin)):
+    """Create admin-posted hustle"""
+    try:
+        hustle_dict = hustle_data.dict()
+        hustle_dict["created_by"] = admin_id
+        hustle_dict["is_admin_posted"] = True
+        hustle_dict["pay_rate"] = hustle_data.estimated_pay
+        hustle_dict["pay_type"] = "estimated"
+        hustle_dict["contact_info"] = hustle_data.application_link or "admin@earnwise.app"
+        hustle_dict["is_remote"] = True
+        
+        hustle = UserHustle(**hustle_dict)
+        await create_hustle(hustle.dict())
+        
+        return hustle
+        
+    except Exception as e:
+        logger.error(f"Admin hustle creation error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Admin hustle creation failed")
 
 @api_router.post("/hustles/{hustle_id}/apply")
-async def apply_to_hustle(hustle_id: str, application_data: HustleApplicationCreate, user_id: str = Depends(get_current_user)):
+@limiter.limit("10/minute")
+async def apply_to_hustle_endpoint(request: Request, hustle_id: str, application_data: HustleApplicationCreate, user_id: str = Depends(get_current_user)):
     """Apply to a user-posted hustle"""
-    # Get hustle
-    hustle = await db.user_hustles.find_one({"id": hustle_id})
-    if not hustle:
-        raise HTTPException(status_code=404, detail="Hustle not found")
-    
-    # Check if already applied
-    if user_id in hustle.get("applicants", []):
-        raise HTTPException(status_code=400, detail="Already applied to this hustle")
-    
-    # Get user info
-    user = await db.users.find_one({"id": user_id})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # Create application
-    application = HustleApplication(
-        hustle_id=hustle_id,
-        applicant_id=user_id,
-        applicant_name=user["full_name"],
-        applicant_email=user["email"],
-        cover_message=application_data.cover_message
-    )
-    
-    await db.hustle_applications.insert_one(application.dict())
-    
-    # Add to hustle applicants
-    await db.user_hustles.update_one(
-        {"id": hustle_id},
-        {"$push": {"applicants": user_id}}
-    )
-    
-    return {"message": "Application submitted successfully"}
+    try:
+        # Get hustle
+        hustle = await db.user_hustles.find_one({"id": hustle_id})
+        if not hustle:
+            raise HTTPException(status_code=404, detail="Hustle not found")
+        
+        # Check if already applied
+        if user_id in hustle.get("applicants", []):
+            raise HTTPException(status_code=400, detail="Already applied to this hustle")
+        
+        # Get user info
+        user = await get_user_by_id(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Create application
+        application_dict = application_data.dict()
+        application_dict["cover_message"] = sanitize_input(application_dict["cover_message"])
+        
+        application = HustleApplication(
+            hustle_id=hustle_id,
+            applicant_id=user_id,
+            applicant_name=user["full_name"],
+            applicant_email=user["email"],
+            **application_dict
+        )
+        
+        await create_hustle_application(application.dict())
+        
+        # Add to hustle applicants
+        await db.user_hustles.update_one(
+            {"id": hustle_id},
+            {"$push": {"applicants": user_id}}
+        )
+        
+        return {"message": "Application submitted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Hustle application error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Hustle application failed")
 
 @api_router.get("/hustles/my-applications")
-async def get_my_applications(user_id: str = Depends(get_current_user)):
+@limiter.limit("20/minute")
+async def get_my_applications_endpoint(request: Request, user_id: str = Depends(get_current_user)):
     """Get user's hustle applications"""
-    applications = await db.hustle_applications.find({"applicant_id": user_id}).sort("applied_at", -1).to_list(100)
+    applications = await get_user_applications(user_id)
     
     # Add hustle info
     for app in applications:
@@ -593,7 +819,8 @@ async def get_my_applications(user_id: str = Depends(get_current_user)):
     return [HustleApplication(**app) for app in applications]
 
 @api_router.get("/hustles/categories")
-async def get_hustle_categories():
+async def get_hustle_categories_endpoint():
+    """Get hustle categories"""
     categories = [
         {"name": "tutoring", "display": "Tutoring & Teaching", "icon": "📚"},
         {"name": "freelance", "display": "Freelance Work", "icon": "💻"},
@@ -605,28 +832,37 @@ async def get_hustle_categories():
 
 # Budget Routes
 @api_router.post("/budgets", response_model=Budget)
-async def create_budget(budget_data: BudgetCreate, user_id: str = Depends(get_current_user)):
+@limiter.limit("10/minute")
+async def create_budget_endpoint(request: Request, budget_data: BudgetCreate, user_id: str = Depends(get_current_user)):
+    """Create budget"""
     budget_dict = budget_data.dict()
     budget_dict["user_id"] = user_id
+    budget_dict["category"] = sanitize_input(budget_dict["category"])
     
     budget = Budget(**budget_dict)
-    await db.budgets.insert_one(budget.dict())
+    await create_budget(budget.dict())
     
     return budget
 
 @api_router.get("/budgets", response_model=List[Budget])
-async def get_budgets(user_id: str = Depends(get_current_user)):
-    budgets = await db.budgets.find({"user_id": user_id}).to_list(100)
+@limiter.limit("20/minute")
+async def get_budgets_endpoint(request: Request, user_id: str = Depends(get_current_user)):
+    """Get user budgets"""
+    budgets = await get_user_budgets(user_id)
     return [Budget(**b) for b in budgets]
 
 # Analytics Routes
 @api_router.get("/analytics/insights")
-async def get_analytics_insights(user_id: str = Depends(get_current_user)):
+@limiter.limit("10/minute")
+async def get_analytics_insights_endpoint(request: Request, user_id: str = Depends(get_current_user)):
+    """Get AI-powered financial insights"""
     insights = await get_financial_insights(user_id)
     return insights
 
 @api_router.get("/analytics/leaderboard")
-async def get_leaderboard():
+@limiter.limit("20/minute")
+async def get_leaderboard_endpoint(request: Request, user_id: str = Depends(get_current_user)):
+    """Get earnings leaderboard (excluding test users)"""
     # Get top earners (last 30 days)
     thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
     
@@ -639,11 +875,11 @@ async def get_leaderboard():
     
     leaderboard_data = await db.transactions.aggregate(pipeline).to_list(10)
     
-    # Get user names for leaderboard
+    # Get user names for leaderboard (exclude test users)
     leaderboard = []
     for item in leaderboard_data:
-        user = await db.users.find_one({"id": item["_id"]})
-        if user:
+        user = await get_user_by_id(item["_id"])
+        if user and not any(test_word in user.get("email", "").lower() for test_word in ['test', 'dummy', 'example', 'demo']):
             leaderboard.append({
                 "user_name": user.get("full_name", "Anonymous"),
                 "profile_photo": user.get("profile_photo"),
@@ -653,16 +889,30 @@ async def get_leaderboard():
     
     return leaderboard
 
+# Admin Routes
+@api_router.get("/admin/users")
+@limiter.limit("20/minute")
+async def get_all_users(request: Request, admin_id: str = Depends(get_current_admin), skip: int = 0, limit: int = 50):
+    """Get all users (Admin only)"""
+    cursor = db.users.find({}).skip(skip).limit(limit).sort("created_at", -1)
+    users = await cursor.to_list(limit)
+    
+    # Remove password hashes
+    for user in users:
+        if "password_hash" in user:
+            del user["password_hash"]
+    
+    return users
+
+@api_router.put("/admin/users/{user_id}/status")
+@limiter.limit("10/minute")
+async def update_user_status(request: Request, user_id: str, is_active: bool, admin_id: str = Depends(get_current_admin)):
+    """Update user active status (Admin only)"""
+    await update_user(user_id, {"is_active": is_active})
+    return {"message": f"User {'activated' if is_active else 'deactivated'} successfully"}
+
 # Include the router in the main app
 app.include_router(api_router)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Configure logging
 logging.basicConfig(
@@ -671,6 +921,28 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database on startup"""
+    await init_database()
+    logger.info("EarnWise Production Server started successfully")
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    """Close database connection on shutdown"""
     client.close()
+    logger.info("Database connection closed")
+
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "version": "2.0.0",
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8001)

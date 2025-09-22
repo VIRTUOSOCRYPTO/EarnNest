@@ -12,6 +12,18 @@ import {
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+// Enhanced currency formatter for large values
+const formatLargeCurrency = (amount) => {
+  if (amount >= 10000000) { // 1 crore
+    return `₹${(amount / 10000000).toFixed(1)}Cr`;
+  } else if (amount >= 100000) { // 1 lakh
+    return `₹${(amount / 100000).toFixed(1)}L`;
+  } else if (amount >= 1000) { // 1 thousand
+    return `₹${(amount / 1000).toFixed(1)}K`;
+  }
+  return formatCurrency(amount);
+};
+
 const Analytics = () => {
   const { user } = useAuth();
   const [insights, setInsights] = useState({});
@@ -81,7 +93,7 @@ const Analytics = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="stat-label">Monthly Income</p>
-              <p className="stat-value text-emerald-600">{formatCurrency(summary.income || 0)}</p>
+              <p className="stat-value text-emerald-600">{formatLargeCurrency(summary.income || 0)}</p>
             </div>
             <div className="p-3 bg-emerald-100 rounded-full">
               <ArrowTrendingUpIcon className="w-6 h-6 text-emerald-600" />
@@ -93,7 +105,7 @@ const Analytics = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="stat-label">Monthly Expenses</p>
-              <p className="stat-value text-red-500">{formatCurrency(summary.expense || 0)}</p>
+              <p className="stat-value text-red-500">{formatLargeCurrency(summary.expense || 0)}</p>
             </div>
             <div className="p-3 bg-red-100 rounded-full">
               <CurrencyDollarIcon className="w-6 h-6 text-red-500" />
@@ -169,7 +181,7 @@ const Analytics = () => {
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-xs text-emerald-600">Income</span>
-                    <span className="text-xs font-semibold text-emerald-600">{formatCurrency(summary.income || 0)}</span>
+                    <span className="text-xs font-semibold text-emerald-600">{formatLargeCurrency(summary.income || 0)}</span>
                   </div>
                   <div className="progress-bar">
                     <div 
@@ -182,7 +194,7 @@ const Analytics = () => {
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-xs text-red-600">Expenses</span>
-                    <span className="text-xs font-semibold text-red-600">{formatCurrency(summary.expense || 0)}</span>
+                    <span className="text-xs font-semibold text-red-600">{formatLargeCurrency(summary.expense || 0)}</span>
                   </div>
                   <div className="progress-bar">
                     <div 
@@ -253,7 +265,7 @@ const Analytics = () => {
             </div>
             <h3 className="font-semibold text-gray-900 mb-1">Emergency Fund</h3>
             <p className="text-sm text-gray-600 mb-2">Build 3 months of expenses</p>
-            <p className="text-lg font-bold text-emerald-600">{formatCurrency((summary.expense || 0) * 3)}</p>
+            <p className="text-lg font-bold text-emerald-600">{formatLargeCurrency((summary.expense || 0) * 3)}</p>
           </div>
           
           <div className="text-center p-4 bg-white rounded-lg shadow-sm">
@@ -262,7 +274,7 @@ const Analytics = () => {
             </div>
             <h3 className="font-semibold text-gray-900 mb-1">Monthly Income Goal</h3>
             <p className="text-sm text-gray-600 mb-2">Increase by 50%</p>
-            <p className="text-lg font-bold text-blue-600">{formatCurrency((summary.income || 0) * 1.5)}</p>
+            <p className="text-lg font-bold text-blue-600">{formatLargeCurrency((summary.income || 0) * 1.5)}</p>
           </div>
           
           <div className="text-center p-4 bg-white rounded-lg shadow-sm">
@@ -271,7 +283,7 @@ const Analytics = () => {
             </div>
             <h3 className="font-semibold text-gray-900 mb-1">Graduation Fund</h3>
             <p className="text-sm text-gray-600 mb-2">Save for post-graduation</p>
-            <p className="text-lg font-bold text-emerald-600">{formatCurrency(5000)}</p>
+            <p className="text-lg font-bold text-emerald-600">{formatLargeCurrency(500000)}</p>
           </div>
         </div>
       </div>

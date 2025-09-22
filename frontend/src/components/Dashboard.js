@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { Link } from 'react-router-dom';
 import { useAuth, formatCurrency } from '../App';
 import { 
   BanknotesIcon, 
@@ -139,10 +140,9 @@ const Dashboard = () => {
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 slide-up" style={{ animationDelay: '0.3s' }}>
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-gray-900">Recent Transactions</h2>
-            <button className="btn-secondary text-sm">
-              <PlusIcon className="w-4 h-4 mr-1" />
-              Add New
-            </button>
+            <Link to="/transactions" className="btn-secondary text-sm">
+              View All
+            </Link>
           </div>
 
           <div className="space-y-3">

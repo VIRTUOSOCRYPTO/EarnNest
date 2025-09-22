@@ -17,6 +17,7 @@ const Transactions = () => {
   const [transactions, setTransactions] = useState([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isMultiCategory, setIsMultiCategory] = useState(false);
   const [formData, setFormData] = useState({
     type: 'income',
     amount: '',
@@ -25,9 +26,20 @@ const Transactions = () => {
     source: '',
     is_hustle_related: false
   });
+  
+  // Multi-category form data
+  const [multiCategoryData, setMultiCategoryData] = useState({
+    type: 'expense',
+    total_amount: '',
+    description: '',
+    categories: {}
+  });
 
   const incomeCategories = ['Salary', 'Freelance', 'Tutoring', 'Side Hustle', 'Scholarship', 'Other'];
-  const expenseCategories = ['Food', 'Transportation', 'Books', 'Entertainment', 'Rent', 'Utilities', 'Other'];
+  const expenseCategories = [
+    'Food', 'Transportation', 'Books', 'Entertainment', 'Rent', 'Utilities', 
+    'Movies', 'Shopping', 'Groceries', 'Subscriptions', 'Emergency Fund', 'Other'
+  ];
 
   useEffect(() => {
     fetchTransactions();
@@ -46,25 +58,66 @@ const Transactions = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
     try {
-      const submitData = {
-        ...formData,
-        amount: parseFloat(formData.amount)
-      };
+      if (isMultiCategory) {
+        // Handle multi-category transaction
+        const totalCategoryAmount = Object.values(multiCategoryData.categories).reduce((sum, amount) => sum + (parseFloat(amount) || 0), 0);
+        
+        if (Math.abs(totalCategoryAmount - parseFloat(multiCategoryData.total_amount)) > 0.01) {
+          alert(`Category amounts (${formatCurrency(totalCategoryAmount)}) don't match total amount (${formatCurrency(parseFloat(multiCategoryData.total_amount))})`);
+          return;
+        }
 
-      await axios.post(`${API}/transactions`, submitData);
+        // Create separate transactions for each category
+        const promises = Object.entries(multiCategoryData.categories).map(([category, amount]) => {
+          if (amount && parseFloat(amount) > 0) {
+            return axios.post(`${API}/transactions`, {
+              type: multiCategoryData.type,
+              amount: parseFloat(amount),
+              category: category,
+              description: `${multiCategoryData.description} (Split transaction)`,
+              source: '',
+              is_hustle_related: false
+            });
+          }
+        }).filter(Boolean);
+
+        await Promise.all(promises);
+        
+        // Reset multi-category form
+        setMultiCategoryData({
+          type: 'expense',
+          total_amount: '',
+          description: '',
+          categories: {}
+        });
+      } else {
+        // Handle single transaction
+        const submitData = {
+          ...formData,
+          amount: parseFloat(formData.amount)
+        };
+
+        await axios.post(`${API}/transactions`, submitData);
+        
+        // Reset single form
+        setFormData({
+          type: 'income',
+          amount: '',
+          category: '',
+          description: '',
+          source: '',
+          is_hustle_related: false
+        });
+      }
+
       setShowAddForm(false);
-      setFormData({
-        type: 'income',
-        amount: '',
-        category: '',
-        description: '',
-        source: '',
-        is_hustle_related: false
-      });
+      setIsMultiCategory(false);
       fetchTransactions();
     } catch (error) {
       console.error('Error adding transaction:', error);
+      alert('Error adding transaction. Please try again.');
     }
   };
 
@@ -74,6 +127,27 @@ const Transactions = () => {
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+  };
+
+  const handleMultiCategoryChange = (field, value) => {
+    setMultiCategoryData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleCategoryAmountChange = (category, amount) => {
+    setMultiCategoryData(prev => ({
+      ...prev,
+      categories: {
+        ...prev.categories,
+        [category]: amount
+      }
+    }));
+  };
+
+  const calculateMultiCategoryTotal = () => {
+    return Object.values(multiCategoryData.categories).reduce((sum, amount) => sum + (parseFloat(amount) || 0), 0);
   };
 
   const formatDate = (dateString) => {
@@ -132,120 +206,244 @@ const Transactions = () => {
       {/* Add Transaction Modal */}
       {showAddForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md slide-up">
-            <h2 className="text-2xl font-bold mb-6">Add New Transaction</h2>
+          <div className="bg-white rounded-xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto slide-up">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold">Add New Transaction</h2>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsMultiCategory(!isMultiCategory)}
+                  className={`px-3 py-1 text-sm rounded-full transition-colors ${
+                    isMultiCategory 
+                      ? 'bg-emerald-100 text-emerald-700' 
+                      : 'bg-gray-100 text-gray-600'
+                  }`}
+                >
+                  {isMultiCategory ? 'Multi-Category' : 'Single Category'}
+                </button>
+              </div>
+            </div>
             
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Type
-                </label>
-                <select
-                  name="type"
-                  value={formData.type}
-                  onChange={handleChange}
-                  className="input-modern"
-                  required
-                >
-                  <option value="income">Income</option>
-                  <option value="expense">Expense</option>
-                </select>
-              </div>
+            {isMultiCategory ? (
+              /* Multi-Category Form */
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <p className="text-sm text-blue-700 mb-2">
+                    Split a single expense across multiple categories
+                  </p>
+                </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Amount
-                </label>
-                <input
-                  type="number"
-                  name="amount"
-                  value={formData.amount}
-                  onChange={handleChange}
-                  className="input-modern"
-                  placeholder="0.00"
-                  step="0.01"
-                  required
-                />
-              </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Total Amount
+                    </label>
+                    <input
+                      type="number"
+                      value={multiCategoryData.total_amount}
+                      onChange={(e) => handleMultiCategoryChange('total_amount', e.target.value)}
+                      className="input-modern"
+                      placeholder="0.00"
+                      step="0.01"
+                      required
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Category
-                </label>
-                <select
-                  name="category"
-                  value={formData.category}
-                  onChange={handleChange}
-                  className="input-modern"
-                  required
-                >
-                  <option value="">Select category</option>
-                  {(formData.type === 'income' ? incomeCategories : expenseCategories).map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-              </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Description
+                    </label>
+                    <input
+                      type="text"
+                      value={multiCategoryData.description}
+                      onChange={(e) => handleMultiCategoryChange('description', e.target.value)}
+                      className="input-modern"
+                      placeholder="Brief description"
+                      required
+                    />
+                  </div>
+                </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Description
-                </label>
-                <input
-                  type="text"
-                  name="description"
-                  value={formData.description}
-                  onChange={handleChange}
-                  className="input-modern"
-                  placeholder="Brief description"
-                  required
-                />
-              </div>
+                {/* Category Amount Grid */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-4">
+                    Category Breakdown
+                  </label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {expenseCategories.map(category => (
+                      <div key={category} className="bg-gray-50 p-3 rounded-lg">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          {category}
+                        </label>
+                        <input
+                          type="number"
+                          value={multiCategoryData.categories[category] || ''}
+                          onChange={(e) => handleCategoryAmountChange(category, e.target.value)}
+                          className="input-modern"
+                          placeholder="0.00"
+                          step="0.01"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-              {formData.type === 'income' && (
+                {/* Summary */}
+                <div className="bg-emerald-50 p-4 rounded-lg">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-600">Total Amount:</span>
+                      <span className="font-semibold ml-2">
+                        {formatCurrency(parseFloat(multiCategoryData.total_amount) || 0)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Categories Total:</span>
+                      <span className={`font-semibold ml-2 ${
+                        Math.abs(calculateMultiCategoryTotal() - (parseFloat(multiCategoryData.total_amount) || 0)) < 0.01
+                          ? 'text-emerald-600' 
+                          : 'text-red-500'
+                      }`}>
+                        {formatCurrency(calculateMultiCategoryTotal())}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddForm(false);
+                      setIsMultiCategory(false);
+                    }}
+                    className="btn-secondary flex-1"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn-primary flex-1"
+                    disabled={Math.abs(calculateMultiCategoryTotal() - (parseFloat(multiCategoryData.total_amount) || 0)) > 0.01}
+                  >
+                    Add Multi-Category Transaction
+                  </button>
+                </div>
+              </form>
+            ) : (
+              /* Single Transaction Form */
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Source (Optional)
+                    Type
+                  </label>
+                  <select
+                    name="type"
+                    value={formData.type}
+                    onChange={handleChange}
+                    className="input-modern"
+                    required
+                  >
+                    <option value="income">Income</option>
+                    <option value="expense">Expense</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Amount
+                  </label>
+                  <input
+                    type="number"
+                    name="amount"
+                    value={formData.amount}
+                    onChange={handleChange}
+                    className="input-modern"
+                    placeholder="0.00"
+                    step="0.01"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Category
+                  </label>
+                  <select
+                    name="category"
+                    value={formData.category}
+                    onChange={handleChange}
+                    className="input-modern"
+                    required
+                  >
+                    <option value="">Select category</option>
+                    {(formData.type === 'income' ? incomeCategories : expenseCategories).map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Description
                   </label>
                   <input
                     type="text"
-                    name="source"
-                    value={formData.source}
+                    name="description"
+                    value={formData.description}
                     onChange={handleChange}
                     className="input-modern"
-                    placeholder="e.g., Upwork, Company Name"
+                    placeholder="Brief description"
+                    required
                   />
                 </div>
-              )}
 
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  name="is_hustle_related"
-                  checked={formData.is_hustle_related}
-                  onChange={handleChange}
-                  className="w-4 h-4 text-emerald-600 rounded mr-2"
-                />
-                <label className="text-sm text-gray-700">
-                  This is related to a side hustle
-                </label>
-              </div>
+                {formData.type === 'income' && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Source (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      name="source"
+                      value={formData.source}
+                      onChange={handleChange}
+                      className="input-modern"
+                      placeholder="e.g., Upwork, Company Name"
+                    />
+                  </div>
+                )}
 
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowAddForm(false)}
-                  className="btn-secondary flex-1"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="btn-primary flex-1"
-                >
-                  Add Transaction
-                </button>
-              </div>
-            </form>
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    name="is_hustle_related"
+                    checked={formData.is_hustle_related}
+                    onChange={handleChange}
+                    className="w-4 h-4 text-emerald-600 rounded mr-2"
+                  />
+                  <label className="text-sm text-gray-700">
+                    This is related to a side hustle
+                  </label>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddForm(false)}
+                    className="btn-secondary flex-1"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn-primary flex-1"
+                  >
+                    Add Transaction
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

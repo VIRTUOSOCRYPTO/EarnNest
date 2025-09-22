@@ -775,6 +775,25 @@ async def get_budgets_endpoint(request: Request, user_id: str = Depends(get_curr
     budgets = await get_user_budgets(user_id)
     return [Budget(**b) for b in budgets]
 
+@api_router.delete("/budgets/{budget_id}")
+@limiter.limit("10/minute")
+async def delete_budget_endpoint(request: Request, budget_id: str, user_id: str = Depends(get_current_user)):
+    """Delete budget"""
+    try:
+        # Verify budget belongs to user
+        budget = await db.budgets.find_one({"id": budget_id, "user_id": user_id})
+        if not budget:
+            raise HTTPException(status_code=404, detail="Budget not found")
+        
+        await db.budgets.delete_one({"id": budget_id, "user_id": user_id})
+        return {"message": "Budget deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Budget deletion error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Budget deletion failed")
+
 # Analytics Routes
 @api_router.get("/analytics/insights")
 @limiter.limit("10/minute")

@@ -11,6 +11,7 @@ import Transaction from './components/Transaction';
 import Hustles from './components/Hustles';
 import Analytics from './components/Analytics';
 import Profile from './components/Profile';
+import Budget from './components/Budget';
 import Navigation from './components/Navigation';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -128,6 +129,10 @@ function App() {
             <Route 
               path="/transactions" 
               element={user ? <Transaction /> : <Navigate to="/login" />} 
+            />
+            <Route 
+              path="/budget" 
+              element={user ? <Budget /> : <Navigate to="/login" />} 
             />
             <Route 
               path="/hustles" 

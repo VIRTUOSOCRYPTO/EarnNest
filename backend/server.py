@@ -13,7 +13,7 @@ import uuid
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any
 
-# Import our modules
+# Import our enhanced modules
 from models import *
 from security import *
 from database import *
@@ -242,15 +242,46 @@ async def get_financial_insights(user_id: str) -> Dict[str, Any]:
         logging.error(f"Financial insights error: {e}")
         return {"insights": ["Keep tracking your finances to unlock AI-powered insights!"]}
 
-# Authentication Routes
+# Enhanced Authentication Routes with Comprehensive OTP Security
 @api_router.post("/auth/register")
 @limiter.limit("5/minute")
 async def register_user(request: Request, user_data: UserCreate):
-    """Register new user with email verification"""
+    """
+    Enhanced user registration with secure OTP email verification
+    
+    Features:
+    - Advanced email validation
+    - Rate limiting (global + per-email)
+    - Comprehensive security logging
+    - Dynamic OTP generation (6-8 digits)
+    - 5-minute OTP expiry
+    - Input sanitization and XSS protection
+    """
     try:
+        # Extract client information for security logging
+        client_ip = getattr(request.client, 'host', 'Unknown') if hasattr(request, 'client') else 'Unknown'
+        
+        # Enhanced email validation
+        if not validate_email_format(user_data.email):
+            log_otp_attempt(user_data.email, "REGISTRATION_INVALID_EMAIL", False, request)
+            raise HTTPException(status_code=400, detail="Invalid email format")
+        
+        # Check email-specific rate limiting for registration
+        rate_limit_result = await check_otp_rate_limit(user_data.email, "REGISTRATION", 3, 15)
+        if rate_limit_result["is_limited"]:
+            log_otp_attempt(user_data.email, "REGISTRATION_RATE_LIMITED", False, request, {
+                "attempts_count": rate_limit_result["attempts_count"],
+                "reset_time": rate_limit_result["reset_time"].isoformat()
+            })
+            raise HTTPException(
+                status_code=429, 
+                detail=f"Too many registration attempts. Try again in {rate_limit_result['window_minutes']} minutes."
+            )
+        
         # Check if user exists
         existing_user = await get_user_by_email(user_data.email)
         if existing_user:
+            log_otp_attempt(user_data.email, "REGISTRATION_EMAIL_EXISTS", False, request)
             raise HTTPException(status_code=400, detail="Email already registered")
         
         # Validate and sanitize input
@@ -271,53 +302,105 @@ async def register_user(request: Request, user_data: UserCreate):
         
         await create_user(user_doc)
         
-        # Generate and send verification code
+        # Generate enhanced verification code
         verification_code = generate_verification_code()
         expires_at = datetime.now(timezone.utc) + EMAIL_VERIFICATION_EXPIRY
         
+        # Store verification code with enhanced security
         await store_verification_code(user_data.email, verification_code, expires_at)
-        await email_service.send_verification_email(user_data.email, verification_code)
+        
+        # Send enhanced email with client IP for security
+        email_sent = await email_service.send_verification_email(user_data.email, verification_code, client_ip)
+        
+        if not email_sent:
+            log_otp_attempt(user_data.email, "REGISTRATION_EMAIL_FAILED", False, request)
+            raise HTTPException(status_code=500, detail="Failed to send verification email")
+        
+        # Log successful registration attempt
+        await log_otp_attempt_to_db(user_data.email, "REGISTRATION", True, client_ip, 
+                                  request.headers.get('user-agent', 'Unknown'))
+        log_otp_attempt(user_data.email, "REGISTRATION_SUCCESS", True, request, {
+            "otp_length": len(verification_code),
+            "expiry_minutes": OTP_EXPIRY_MINUTES
+        })
         
         return {
-            "message": "Registration successful! Please check your email for verification code.",
+            "message": f"Registration successful! Please check your email for a {len(verification_code)}-digit verification code.",
             "email": user_data.email,
-            "verification_required": True
+            "verification_required": True,
+            "code_expires_in_minutes": OTP_EXPIRY_MINUTES,
+            "code_length": len(verification_code)
         }
         
     except HTTPException:
         raise
     except Exception as e:
+        log_otp_attempt(user_data.email, "REGISTRATION_ERROR", False, request, {"error": str(e)})
         logger.error(f"Registration error: {str(e)}")
         raise HTTPException(status_code=500, detail="Registration failed")
 
 @api_router.post("/auth/verify-email")
 @limiter.limit("10/minute")
 async def verify_email(request: Request, verification: EmailVerificationConfirm):
-    """Verify email with code"""
+    """
+    Enhanced email verification with comprehensive security checks
+    
+    Features:
+    - Advanced OTP verification with attempt tracking
+    - Rate limiting and security logging
+    - Automatic cleanup of expired codes
+    - Enhanced error messages and feedback
+    - Security event logging
+    """
     try:
-        # Get stored verification code
-        stored_verification = await get_verification_code(verification.email)
-        if not stored_verification:
-            raise HTTPException(status_code=400, detail="No verification code found")
+        # Extract client information
+        client_ip = getattr(request.client, 'host', 'Unknown') if hasattr(request, 'client') else 'Unknown'
         
-        # Check if code matches and hasn't expired
-        if stored_verification["code"] != verification.verification_code:
-            raise HTTPException(status_code=400, detail="Invalid verification code")
+        # Validate email format
+        if not validate_email_format(verification.email):
+            log_otp_attempt(verification.email, "VERIFY_INVALID_EMAIL", False, request)
+            raise HTTPException(status_code=400, detail="Invalid email format")
         
-        # Handle timezone comparison properly
-        expires_at = stored_verification["expires_at"]
-        if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        # Check verification rate limiting
+        rate_limit_result = await check_otp_rate_limit(verification.email, "EMAIL_VERIFY", 5, 5)
+        if rate_limit_result["is_limited"]:
+            log_otp_attempt(verification.email, "VERIFY_RATE_LIMITED", False, request, {
+                "attempts_count": rate_limit_result["attempts_count"]
+            })
+            raise HTTPException(
+                status_code=429, 
+                detail=f"Too many verification attempts. Try again in {rate_limit_result['window_minutes']} minutes."
+            )
         
-        if datetime.now(timezone.utc) > expires_at:
-            await delete_verification_code(verification.email)
-            raise HTTPException(status_code=400, detail="Verification code expired")
+        # Use enhanced verification function
+        verification_result = await verify_otp_with_security_checks(
+            verification.email, 
+            verification.verification_code, 
+            "email_verification"
+        )
+        
+        if not verification_result["success"]:
+            # Log failed verification attempt
+            await log_otp_attempt_to_db(verification.email, "EMAIL_VERIFY", False, client_ip,
+                                      request.headers.get('user-agent', 'Unknown'),
+                                      {"error": verification_result["error_code"]})
+            log_otp_attempt(verification.email, "VERIFY_FAILED", False, request, 
+                          {"error": verification_result["error_code"]})
+            
+            if verification_result["error_code"] == "OTP_EXPIRED":
+                raise HTTPException(status_code=400, detail=f"Verification code expired. Codes expire after {OTP_EXPIRY_MINUTES} minutes for security.")
+            elif verification_result["error_code"] == "OTP_INVALID":
+                raise HTTPException(status_code=400, detail="Invalid verification code. Please check the code and try again.")
+            else:
+                raise HTTPException(status_code=400, detail=verification_result["error"])
         
         # Activate user account
         user_doc = await get_user_by_email(verification.email)
         if not user_doc:
+            log_otp_attempt(verification.email, "VERIFY_USER_NOT_FOUND", False, request)
             raise HTTPException(status_code=404, detail="User not found")
         
+        # Update user status
         await update_user(
             user_doc["id"],
             {
@@ -327,60 +410,115 @@ async def verify_email(request: Request, verification: EmailVerificationConfirm)
             }
         )
         
-        # Clean up verification code
-        await delete_verification_code(verification.email)
-        
-        # Get user and create token
-        user_doc = await get_user_by_email(verification.email)
-        if not user_doc:
-            raise HTTPException(status_code=404, detail="User not found")
-        
         # Send welcome email
         await email_service.send_welcome_email(verification.email, user_doc["full_name"])
         
         # Create JWT token
         token = create_jwt_token(user_doc["id"])
         
+        # Log successful verification
+        await log_otp_attempt_to_db(verification.email, "EMAIL_VERIFY", True, client_ip,
+                                  request.headers.get('user-agent', 'Unknown'))
+        log_otp_attempt(verification.email, "VERIFY_SUCCESS", True, request)
+        await log_security_event("EMAIL_VERIFIED", user_doc["id"], verification.email, client_ip)
+        
         # Remove password hash from response
         del user_doc["password_hash"]
         user = User(**user_doc)
         
         return {
-            "message": "Email verified successfully!",
+            "message": "Email verified successfully! Welcome to EarnWise!",
             "token": token,
-            "user": user.dict()
+            "user": user.dict(),
+            "verification_timestamp": datetime.now(timezone.utc).isoformat()
         }
         
     except HTTPException:
         raise
     except Exception as e:
+        log_otp_attempt(verification.email, "VERIFY_ERROR", False, request, {"error": str(e)})
         logger.error(f"Email verification error: {str(e)}")
         raise HTTPException(status_code=500, detail="Email verification failed")
 
 @api_router.post("/auth/resend-verification")
 @limiter.limit("3/minute")
 async def resend_verification(request: Request, email_request: EmailVerificationRequest):
-    """Resend verification email"""
+    """
+    Enhanced resend verification email with comprehensive security features
+    
+    Features:
+    - Email-specific rate limiting (stricter than global)
+    - Enhanced validation and security logging
+    - Automatic cleanup of expired codes
+    - Detailed security tracking
+    - Client IP logging for security monitoring
+    """
     try:
+        # Extract client information
+        client_ip = getattr(request.client, 'host', 'Unknown') if hasattr(request, 'client') else 'Unknown'
+        
+        # Validate email format
+        if not validate_email_format(email_request.email):
+            log_otp_attempt(email_request.email, "RESEND_INVALID_EMAIL", False, request)
+            raise HTTPException(status_code=400, detail="Invalid email format")
+        
+        # Check email-specific rate limiting for resend (2 requests per 5 minutes)
+        rate_limit_result = await check_otp_rate_limit(email_request.email, "OTP_RESEND", 2, 5)
+        if rate_limit_result["is_limited"]:
+            log_otp_attempt(email_request.email, "RESEND_RATE_LIMITED", False, request, {
+                "attempts_count": rate_limit_result["attempts_count"],
+                "remaining_time": rate_limit_result["window_minutes"]
+            })
+            raise HTTPException(
+                status_code=429, 
+                detail=f"Too many resend requests. You can request a new code {rate_limit_result['remaining_attempts']} more times. Try again in {rate_limit_result['window_minutes']} minutes."
+            )
+        
+        # Check if user exists
         user = await get_user_by_email(email_request.email)
         if not user:
-            raise HTTPException(status_code=400, detail="Email not found")
+            log_otp_attempt(email_request.email, "RESEND_USER_NOT_FOUND", False, request)
+            # Don't reveal if email exists or not for security
+            return {"message": "If the email exists and is not verified, a new verification code has been sent."}
         
+        # Check if email is already verified
         if user.get("email_verified", False):
+            log_otp_attempt(email_request.email, "RESEND_ALREADY_VERIFIED", False, request)
             raise HTTPException(status_code=400, detail="Email already verified")
         
-        # Generate new verification code
+        # Generate new enhanced verification code
         verification_code = generate_verification_code()
         expires_at = datetime.now(timezone.utc) + EMAIL_VERIFICATION_EXPIRY
         
+        # Store new verification code (this will replace any existing code)
         await store_verification_code(email_request.email, verification_code, expires_at)
-        await email_service.send_verification_email(email_request.email, verification_code)
         
-        return {"message": "Verification code sent successfully"}
+        # Send enhanced email with security information
+        email_sent = await email_service.send_verification_email(email_request.email, verification_code, client_ip)
+        
+        if not email_sent:
+            log_otp_attempt(email_request.email, "RESEND_EMAIL_FAILED", False, request)
+            raise HTTPException(status_code=500, detail="Failed to send verification email")
+        
+        # Log successful resend
+        await log_otp_attempt_to_db(email_request.email, "OTP_RESEND", True, client_ip,
+                                  request.headers.get('user-agent', 'Unknown'))
+        log_otp_attempt(email_request.email, "RESEND_SUCCESS", True, request, {
+            "otp_length": len(verification_code),
+            "expiry_minutes": OTP_EXPIRY_MINUTES
+        })
+        
+        return {
+            "message": f"New {len(verification_code)}-digit verification code sent successfully!",
+            "code_expires_in_minutes": OTP_EXPIRY_MINUTES,
+            "remaining_resend_attempts": rate_limit_result["remaining_attempts"] - 1,
+            "resend_reset_time": rate_limit_result["reset_time"].isoformat()
+        }
         
     except HTTPException:
         raise
     except Exception as e:
+        log_otp_attempt(email_request.email, "RESEND_ERROR", False, request, {"error": str(e)})
         logger.error(f"Resend verification error: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to resend verification")
 
@@ -460,80 +598,230 @@ async def login_user(request: Request, login_data: UserLogin):
 
 @api_router.post("/auth/password-strength")
 async def check_password_strength_endpoint(request: Request, password_data: dict):
-    """Check password strength"""
+    """Enhanced password strength checker with detailed feedback"""
     password = password_data.get("password", "")
     strength_info = check_password_strength(password)
+    
+    # Log password strength check for security monitoring
+    log_otp_attempt("system", "PASSWORD_STRENGTH_CHECK", True, request, {
+        "strength_score": strength_info["score"],
+        "strength_level": strength_info["strength"]
+    })
+    
     return strength_info
+
+@api_router.get("/auth/otp-config")
+async def get_otp_configuration():
+    """
+    Get current OTP system configuration for debugging and monitoring
+    
+    Returns current OTP settings including:
+    - OTP length configuration
+    - Expiry time settings
+    - Rate limiting configuration
+    - Security feature status
+    """
+    config = get_otp_config()
+    
+    return {
+        "otp_system": {
+            "version": "2.0",
+            "features": [
+                "Dynamic OTP length (6-8 digits)",
+                "5-minute expiry for enhanced security", 
+                "Email-specific rate limiting",
+                "Comprehensive security logging",
+                "Enhanced email validation",
+                "Automatic cleanup of expired codes",
+                "Client IP tracking",
+                "Security event monitoring"
+            ]
+        },
+        "configuration": config,
+        "security_status": "Enhanced",
+        "last_updated": datetime.now(timezone.utc).isoformat()
+    }
 
 @api_router.post("/auth/forgot-password")
 @limiter.limit("3/minute")
 async def forgot_password(request: Request, email_request: EmailVerificationRequest):
-    """Send password reset code"""
+    """
+    Enhanced forgot password with comprehensive security features
+    
+    Features:
+    - Email-specific rate limiting
+    - Enhanced validation and security logging
+    - Dynamic OTP generation with 5-minute expiry
+    - Client IP tracking for security monitoring
+    - Comprehensive attempt logging
+    """
     try:
-        user = await get_user_by_email(email_request.email)
-        if not user:
-            # Don't reveal if email exists or not
+        # Extract client information
+        client_ip = getattr(request.client, 'host', 'Unknown') if hasattr(request, 'client') else 'Unknown'
+        
+        # Validate email format
+        if not validate_email_format(email_request.email):
+            log_otp_attempt(email_request.email, "FORGOT_INVALID_EMAIL", False, request)
+            # Don't reveal validation failure for security
             return {"message": "If the email exists, a reset code has been sent"}
         
-        # Generate reset code
+        # Check email-specific rate limiting for password reset (2 requests per 10 minutes)
+        rate_limit_result = await check_otp_rate_limit(email_request.email, "PASSWORD_RESET", 2, 10)
+        if rate_limit_result["is_limited"]:
+            log_otp_attempt(email_request.email, "FORGOT_RATE_LIMITED", False, request, {
+                "attempts_count": rate_limit_result["attempts_count"]
+            })
+            # Don't reveal rate limiting for security
+            return {"message": "If the email exists, a reset code has been sent"}
+        
+        # Check if user exists
+        user = await get_user_by_email(email_request.email)
+        if not user:
+            log_otp_attempt(email_request.email, "FORGOT_USER_NOT_FOUND", False, request)
+            # Don't reveal if email exists or not for security
+            return {"message": "If the email exists, a reset code has been sent"}
+        
+        # Check if account is active
+        if not user.get("is_active", True):
+            log_otp_attempt(email_request.email, "FORGOT_ACCOUNT_INACTIVE", False, request)
+            return {"message": "If the email exists, a reset code has been sent"}
+        
+        # Generate enhanced reset code
         reset_code = generate_verification_code()
         expires_at = datetime.now(timezone.utc) + PASSWORD_RESET_EXPIRY
         
+        # Store reset code with enhanced security
         await store_password_reset_code(email_request.email, reset_code, expires_at)
-        await email_service.send_password_reset_email(email_request.email, reset_code)
         
+        # Send enhanced email with security information
+        email_sent = await email_service.send_password_reset_email(email_request.email, reset_code, client_ip)
+        
+        if email_sent:
+            # Log successful reset request
+            await log_otp_attempt_to_db(email_request.email, "PASSWORD_RESET", True, client_ip,
+                                      request.headers.get('user-agent', 'Unknown'))
+            log_otp_attempt(email_request.email, "FORGOT_SUCCESS", True, request, {
+                "otp_length": len(reset_code),
+                "expiry_minutes": OTP_EXPIRY_MINUTES
+            })
+            await log_security_event("PASSWORD_RESET_REQUESTED", user["id"], email_request.email, client_ip)
+        else:
+            log_otp_attempt(email_request.email, "FORGOT_EMAIL_FAILED", False, request)
+        
+        # Always return the same message for security
         return {"message": "If the email exists, a reset code has been sent"}
         
     except Exception as e:
+        log_otp_attempt(email_request.email, "FORGOT_ERROR", False, request, {"error": str(e)})
         logger.error(f"Forgot password error: {str(e)}")
         return {"message": "If the email exists, a reset code has been sent"}
 
 @api_router.post("/auth/reset-password")
 @limiter.limit("5/minute")
 async def reset_password(request: Request, reset_data: PasswordResetConfirm):
-    """Reset password with code"""
+    """
+    Enhanced password reset with comprehensive security checks
+    
+    Features:
+    - Advanced OTP verification with security checks
+    - Rate limiting and attempt tracking
+    - Enhanced password validation
+    - Comprehensive security logging
+    - Automatic security cleanup
+    """
     try:
-        # Get stored reset code
-        stored_reset = await get_password_reset_code(reset_data.email)
-        if not stored_reset:
-            raise HTTPException(status_code=400, detail="No reset code found")
+        # Extract client information
+        client_ip = getattr(request.client, 'host', 'Unknown') if hasattr(request, 'client') else 'Unknown'
         
-        # Check if code matches and hasn't expired
-        if stored_reset["code"] != reset_data.reset_code:
-            raise HTTPException(status_code=400, detail="Invalid reset code")
+        # Validate email format
+        if not validate_email_format(reset_data.email):
+            log_otp_attempt(reset_data.email, "RESET_INVALID_EMAIL", False, request)
+            raise HTTPException(status_code=400, detail="Invalid email format")
         
-        # Handle timezone comparison properly
-        expires_at = stored_reset["expires_at"]
-        if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        # Check reset rate limiting
+        rate_limit_result = await check_otp_rate_limit(reset_data.email, "PASSWORD_RESET_CONFIRM", 5, 5)
+        if rate_limit_result["is_limited"]:
+            log_otp_attempt(reset_data.email, "RESET_RATE_LIMITED", False, request, {
+                "attempts_count": rate_limit_result["attempts_count"]
+            })
+            raise HTTPException(
+                status_code=429, 
+                detail=f"Too many reset attempts. Try again in {rate_limit_result['window_minutes']} minutes."
+            )
         
-        if datetime.now(timezone.utc) > expires_at:
-            await delete_password_reset_code(reset_data.email)
-            raise HTTPException(status_code=400, detail="Reset code expired")
+        # Use enhanced verification function
+        verification_result = await verify_otp_with_security_checks(
+            reset_data.email, 
+            reset_data.reset_code, 
+            "password_reset"
+        )
         
-        # Update password
-        hashed_password = hash_password(reset_data.new_password)
+        if not verification_result["success"]:
+            # Log failed reset attempt
+            await log_otp_attempt_to_db(reset_data.email, "PASSWORD_RESET_CONFIRM", False, client_ip,
+                                      request.headers.get('user-agent', 'Unknown'),
+                                      {"error": verification_result["error_code"]})
+            log_otp_attempt(reset_data.email, "RESET_FAILED", False, request, 
+                          {"error": verification_result["error_code"]})
+            
+            if verification_result["error_code"] == "OTP_EXPIRED":
+                raise HTTPException(status_code=400, detail=f"Reset code expired. Codes expire after {OTP_EXPIRY_MINUTES} minutes for security.")
+            elif verification_result["error_code"] == "OTP_INVALID":
+                raise HTTPException(status_code=400, detail="Invalid reset code. Please check the code and try again.")
+            else:
+                raise HTTPException(status_code=400, detail=verification_result["error"])
+        
+        # Get user for password update
         user = await get_user_by_email(reset_data.email)
         if not user:
+            log_otp_attempt(reset_data.email, "RESET_USER_NOT_FOUND", False, request)
             raise HTTPException(status_code=404, detail="User not found")
         
+        # Validate new password strength
+        password_strength = check_password_strength(reset_data.new_password)
+        if password_strength["score"] < 40:  # Require at least medium strength
+            log_otp_attempt(reset_data.email, "RESET_WEAK_PASSWORD", False, request, {
+                "password_score": password_strength["score"]
+            })
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Password too weak (score: {password_strength['score']}/100). " + 
+                       ", ".join(password_strength["feedback"])
+            )
+        
+        # Update password with enhanced security
+        hashed_password = hash_password(reset_data.new_password)
         await update_user(
             user["id"], 
             {
                 "password_hash": hashed_password,
                 "failed_login_attempts": 0,
-                "last_failed_login": None
+                "last_failed_login": None,
+                "password_changed_at": datetime.now(timezone.utc)  # Track password changes
             }
         )
         
-        # Clean up reset code
-        await delete_password_reset_code(reset_data.email)
+        # Log successful password reset
+        await log_otp_attempt_to_db(reset_data.email, "PASSWORD_RESET_CONFIRM", True, client_ip,
+                                  request.headers.get('user-agent', 'Unknown'))
+        log_otp_attempt(reset_data.email, "RESET_SUCCESS", True, request)
+        await log_security_event("PASSWORD_RESET_COMPLETED", user["id"], reset_data.email, client_ip, {
+            "password_strength_score": password_strength["score"]
+        })
         
-        return {"message": "Password reset successfully"}
+        return {
+            "message": "Password reset successfully! Your account is now secure.",
+            "password_strength": {
+                "score": password_strength["score"],
+                "strength": password_strength["strength"]
+            },
+            "reset_timestamp": datetime.now(timezone.utc).isoformat()
+        }
         
     except HTTPException:
         raise
     except Exception as e:
+        log_otp_attempt(reset_data.email, "RESET_ERROR", False, request, {"error": str(e)})
         logger.error(f"Reset password error: {str(e)}")
         raise HTTPException(status_code=500, detail="Password reset failed")
 

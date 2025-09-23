@@ -31,7 +31,7 @@ UPLOADS_DIR.mkdir(exist_ok=True)
 
 # Create the main app
 app = FastAPI(
-    title="EarnWise - Student Finance & Side Hustle Platform",
+    title="EarnNest - Student Finance & Side Hustle Platform",
     description="Production-ready platform for student financial management and side hustles",
     version="2.0.0",
     docs_url="/api/docs" if os.environ.get("ENVIRONMENT") != "production" else None,
@@ -113,18 +113,28 @@ async def get_current_admin(user_id: str = Depends(get_current_user)) -> str:
     return user_id
 
 async def get_enhanced_ai_hustle_recommendations(user_skills: List[str], availability: int, recent_earnings: float, location: str = None) -> List[Dict]:
-    """Generate enhanced AI-powered hustle recommendations"""
+    """Generate enhanced AI-powered hustle recommendations based on user skills"""
     try:
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=f"hustle_rec_{uuid.uuid4()}",
-            system_message="""You are an AI advisor for student side hustles in India. Based on user skills, availability, recent earnings, and location, recommend 8 specific hustle opportunities. Focus on Indian market opportunities and use INR currency.
+            system_message="""You are an AI advisor for student side hustles in India. Based on user skills, generate personalized side hustle recommendations. 
+            
+            Skill-based recommendations:
+            - Freelancing → "Freelance Services", "Remote Work", "Consultation"
+            - Graphic Design → "Logo Design", "Social Media Graphics", "Poster/Flyer Design"  
+            - Coding → "Website Development", "App Development", "Automation Scripts"
+            - Digital Marketing → "Social Media Campaigns", "SEO Consulting", "Content Strategy"
+            - Content Writing → "Blog Writing", "Copywriting", "Technical Writing"
+            - Video Editing → "YouTube Shorts", "Promotional Videos", "TikTok Content"
+            - AI Tools & Automation → "Chatbot Development", "AI Content Generation", "Process Automation"
+            - Social Media Management → "Account Management", "Content Planning", "Community Building"
             
             Return ONLY a JSON array with this exact format:
             [
                 {
-                    "title": "Exact hustle title",
-                    "description": "Brief description focusing on Indian market",
+                    "title": "Exact hustle title based on skills",
+                    "description": "Brief description for Indian market",
                     "category": "tutoring|freelance|content_creation|delivery|micro_tasks",
                     "estimated_pay": number (in INR per hour),
                     "time_commitment": "X hours/week",
@@ -140,7 +150,7 @@ async def get_enhanced_ai_hustle_recommendations(user_skills: List[str], availab
         earnings_context = f"Current monthly earnings: ₹{recent_earnings}" if recent_earnings > 0 else "No current side hustle earnings"
         
         user_message = UserMessage(
-            text=f"User profile: Skills: {', '.join(user_skills) if user_skills else 'General skills'}. Available {availability} hours/week{location_context}. {earnings_context}. Recommend 8 personalized side hustle opportunities with Indian market focus and INR rates."
+            text=f"User skills: {', '.join(user_skills) if user_skills else 'General skills'}. Available {availability} hours/week{location_context}. {earnings_context}. Generate 6 personalized side hustle opportunities based on these specific skills with Indian market focus and INR rates."
         )
         
         response = await chat.send_message(user_message)
@@ -149,97 +159,288 @@ async def get_enhanced_ai_hustle_recommendations(user_skills: List[str], availab
         import json
         try:
             recommendations = json.loads(response)
-            return recommendations[:8]  # Ensure max 8 recommendations
+            return recommendations[:6]  # Ensure max 6 recommendations
         except json.JSONDecodeError:
-            # Fallback recommendations for Indian market
-            return [
-                {
-                    "title": "Online Tutoring (BYJU'S/Vedantu)",
-                    "description": "Teach subjects you excel in to students across India",
-                    "category": "tutoring",
-                    "estimated_pay": 300.0,
-                    "time_commitment": "10-15 hours/week",
-                    "required_skills": user_skills[:2] if user_skills else ["Subject Knowledge"],
-                    "difficulty_level": "beginner",
-                    "platform": "BYJU'S, Vedantu, Unacademy",
-                    "match_score": 90.0
-                },
-                {
-                    "title": "Content Writing (Hindi/English)",
-                    "description": "Write articles, blogs, and social media content for Indian brands",
-                    "category": "freelance",
-                    "estimated_pay": 250.0,
-                    "time_commitment": "8-12 hours/week",
-                    "required_skills": ["Writing", "Research"],
-                    "difficulty_level": "intermediate",
-                    "platform": "Upwork, Freelancer, Truelancer",
-                    "match_score": 85.0
-                },
-                {
-                    "title": "Food Delivery Partner",
-                    "description": "Deliver food orders in your local area with flexible timing",
-                    "category": "delivery",
-                    "estimated_pay": 200.0,
-                    "time_commitment": "15-20 hours/week",
-                    "required_skills": ["Time Management", "Local Knowledge"],
-                    "difficulty_level": "beginner",
-                    "platform": "Zomato, Swiggy, Dunzo",
-                    "match_score": 75.0
-                },
-                {
-                    "title": "Social Media Management",
-                    "description": "Manage social media accounts for small Indian businesses",
-                    "category": "content_creation",
-                    "estimated_pay": 400.0,
-                    "time_commitment": "6-10 hours/week",
-                    "required_skills": ["Social Media", "Content Creation"],
-                    "difficulty_level": "intermediate",
-                    "platform": "Direct Client Outreach",
-                    "match_score": 80.0
-                }
-            ]
+            # Fallback recommendations based on skills
+            skill_based_hustles = []
+            
+            for skill in user_skills:
+                if "graphic design" in skill.lower():
+                    skill_based_hustles.extend([
+                        {
+                            "title": "Freelance Logo Design",
+                            "description": "Design logos for small Indian businesses and startups",
+                            "category": "freelance",
+                            "estimated_pay": 500.0,
+                            "time_commitment": "8-12 hours/week",
+                            "required_skills": ["Graphic Design", "Creative Thinking"],
+                            "difficulty_level": "intermediate",
+                            "platform": "Upwork, Fiverr, Truelancer",
+                            "match_score": 95.0
+                        },
+                        {
+                            "title": "Social Media Graphics Designer",
+                            "description": "Create graphics for Indian social media campaigns",
+                            "category": "content_creation",
+                            "estimated_pay": 400.0,
+                            "time_commitment": "10-15 hours/week",
+                            "required_skills": ["Graphic Design", "Social Media"],
+                            "difficulty_level": "beginner",
+                            "platform": "Direct Client Outreach, Instagram",
+                            "match_score": 90.0
+                        }
+                    ])
+                
+                if "coding" in skill.lower():
+                    skill_based_hustles.extend([
+                        {
+                            "title": "Website Development",
+                            "description": "Build websites for Indian small businesses",
+                            "category": "freelance",
+                            "estimated_pay": 800.0,
+                            "time_commitment": "15-20 hours/week",
+                            "required_skills": ["Coding", "Web Development"],
+                            "difficulty_level": "intermediate",
+                            "platform": "Upwork, Freelancer, Local Contacts",
+                            "match_score": 95.0
+                        },
+                        {
+                            "title": "App Development",
+                            "description": "Create mobile apps for Indian startups",
+                            "category": "freelance",
+                            "estimated_pay": 1000.0,
+                            "time_commitment": "20+ hours/week",
+                            "required_skills": ["Coding", "Mobile Development"],
+                            "difficulty_level": "advanced",
+                            "platform": "Upwork, AngelList, Direct Contacts",
+                            "match_score": 90.0
+                        }
+                    ])
+                
+                if "digital marketing" in skill.lower():
+                    skill_based_hustles.extend([
+                        {
+                            "title": "Social Media Campaign Management",
+                            "description": "Manage social media campaigns for Indian brands",
+                            "category": "content_creation",
+                            "estimated_pay": 600.0,
+                            "time_commitment": "10-15 hours/week",
+                            "required_skills": ["Digital Marketing", "Analytics"],
+                            "difficulty_level": "intermediate",
+                            "platform": "Direct Client Outreach",
+                            "match_score": 88.0
+                        }
+                    ])
+                
+                if "content writing" in skill.lower():
+                    skill_based_hustles.extend([
+                        {
+                            "title": "Blog Writing for Indian Businesses",
+                            "description": "Write blogs and articles for Indian companies",
+                            "category": "freelance",
+                            "estimated_pay": 300.0,
+                            "time_commitment": "8-12 hours/week",
+                            "required_skills": ["Content Writing", "Research"],
+                            "difficulty_level": "beginner",
+                            "platform": "Upwork, ContentKing, Truelancer",
+                            "match_score": 85.0
+                        }
+                    ])
+            
+            # If no skill-based hustles found, return general recommendations
+            if not skill_based_hustles:
+                return [
+                    {
+                        "title": "Online Tutoring (BYJU'S/Vedantu)",
+                        "description": "Teach subjects you excel in to students across India",
+                        "category": "tutoring",
+                        "estimated_pay": 300.0,
+                        "time_commitment": "10-15 hours/week",
+                        "required_skills": user_skills[:2] if user_skills else ["Subject Knowledge"],
+                        "difficulty_level": "beginner",
+                        "platform": "BYJU'S, Vedantu, Unacademy",
+                        "match_score": 80.0
+                    }
+                ]
+            
+            return skill_based_hustles[:6]
             
     except Exception as e:
         logging.error(f"AI recommendation error: {e}")
         return []
 
-async def get_financial_insights(user_id: str) -> Dict[str, Any]:
-    """Generate AI-powered financial insights"""
+async def get_dynamic_financial_insights(user_id: str) -> Dict[str, Any]:
+    """Generate dynamic AI-powered financial insights based on user activity"""
     try:
-        # Get user's recent transactions
+        # Get user's financial data
+        user_doc = await get_user_by_id(user_id)
         transactions = await get_user_transactions(user_id, limit=50)
+        budgets = await get_user_budgets(user_id)
+        goals = await get_user_financial_goals(user_id)
         
         if not transactions:
             return {"insights": ["Start tracking your expenses to get personalized insights!"]}
         
-        # Calculate basic stats
+        # Calculate comprehensive stats
         total_income = sum(t["amount"] for t in transactions if t["type"] == "income")
         total_expenses = sum(t["amount"] for t in transactions if t["type"] == "expense")
+        net_savings = total_income - total_expenses
         
-        chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=f"financial_insights_{user_id}",
-            system_message="You are a financial advisor for Indian students. Provide 3-5 actionable insights based on their spending patterns. Use INR currency and be encouraging and specific to Indian context."
-        ).with_model("openai", "gpt-4o")
-
-        user_message = UserMessage(
-            text=f"Indian student's financial summary: Total income: ₹{total_income}, Total expenses: ₹{total_expenses}. Recent transactions: {len(transactions)} entries. Provide personalized financial insights and tips for Indian students."
-        )
-
-        response = await chat.send_message(user_message)
+        # Calculate budget utilization
+        budget_stats = {}
+        for budget in budgets:
+            category = budget["category"]
+            utilization = (budget["spent_amount"] / budget["allocated_amount"]) * 100
+            budget_stats[category] = {
+                "allocated": budget["allocated_amount"],
+                "spent": budget["spent_amount"],
+                "remaining": budget["allocated_amount"] - budget["spent_amount"],
+                "utilization": utilization
+            }
+        
+        # Calculate goal progress
+        goal_stats = {}
+        for goal in goals:
+            progress = (goal["current_amount"] / goal["target_amount"]) * 100
+            goal_stats[goal["name"]] = {
+                "target": goal["target_amount"],
+                "current": goal["current_amount"],
+                "progress": progress,
+                "remaining": goal["target_amount"] - goal["current_amount"]
+            }
+        
+        # Income streak calculation
+        income_transactions = [t for t in transactions if t["type"] == "income"]
+        income_dates = [t["date"] for t in income_transactions]
+        income_streak = calculate_income_streak(income_dates)
+        
+        # Generate dynamic insights
+        insights = []
+        
+        # Savings insights
+        if net_savings > 0:
+            savings_rate = (net_savings / total_income) * 100 if total_income > 0 else 0
+            if savings_rate > 20:
+                insights.append(f"Excellent! You're saving {savings_rate:.1f}% of your income - keep up the great work! 🎉")
+            elif savings_rate > 10:
+                insights.append(f"Good job! You're saving {savings_rate:.1f}% of your income. Aim for 20% for better financial health! 💪")
+            else:
+                insights.append(f"You're saving {savings_rate:.1f}% of your income. Try to increase savings to 20% for better financial security! 📈")
+        
+        # Budget insights
+        over_budget_categories = [cat for cat, stats in budget_stats.items() if stats["utilization"] > 90]
+        under_budget_categories = [cat for cat, stats in budget_stats.items() if stats["utilization"] < 50]
+        
+        if over_budget_categories:
+            for category in over_budget_categories[:2]:  # Limit to 2 categories
+                remaining = budget_stats[category]["remaining"]
+                if remaining <= 0:
+                    insights.append(f"⚠️ You've exceeded your {category} budget! Consider reducing expenses in this category.")
+                else:
+                    insights.append(f"⚠️ You're close to your {category} budget limit. Only ₹{remaining:.0f} remaining!")
+        
+        if under_budget_categories:
+            best_category = min(under_budget_categories, key=lambda x: budget_stats[x]["utilization"])
+            saved_amount = budget_stats[best_category]["remaining"]
+            insights.append(f"Great job! Your {best_category} budget is under control. You've saved ₹{saved_amount:.0f} this month! 🎯")
+        
+        # Goal insights
+        for goal_name, stats in goal_stats.items():
+            if stats["progress"] > 75:
+                insights.append(f"🎊 You're {stats['progress']:.0f}% towards your {goal_name} goal! Almost there!")
+            elif stats["progress"] > 50:
+                insights.append(f"💪 You've reached {stats['progress']:.0f}% of your {goal_name} target. Keep going!")
+            elif stats["progress"] > 25:
+                insights.append(f"📈 You're {stats['progress']:.0f}% towards your {goal_name}. Consider increasing your savings rate!")
+        
+        # Income streak insights
+        if income_streak >= 7:
+            insights.append(f"🔥 Amazing! You're on a {income_streak}-day income streak - achievement unlocked soon!")
+        elif income_streak >= 3:
+            insights.append(f"💼 Good momentum! You're on a {income_streak}-day income streak. Keep it up!")
+        
+        # Spending pattern insights
+        expense_categories = {}
+        for transaction in transactions:
+            if transaction["type"] == "expense":
+                category = transaction["category"]
+                expense_categories[category] = expense_categories.get(category, 0) + transaction["amount"]
+        
+        if expense_categories:
+            highest_expense_category = max(expense_categories, key=expense_categories.get)
+            highest_amount = expense_categories[highest_expense_category]
+            insights.append(f"💡 Your highest expense category is {highest_expense_category} (₹{highest_amount:.0f}). Consider reviewing these expenses!")
         
         return {
             "total_income": total_income,
             "total_expenses": total_expenses,
-            "net_savings": total_income - total_expenses,
-            "insights": [response]
+            "net_savings": net_savings,
+            "savings_rate": (net_savings / total_income) * 100 if total_income > 0 else 0,
+            "income_streak": income_streak,
+            "budget_stats": budget_stats,
+            "goal_stats": goal_stats,
+            "insights": insights[:5]  # Limit to 5 most relevant insights
         }
         
     except Exception as e:
-        logging.error(f"Financial insights error: {e}")
+        logging.error(f"Dynamic financial insights error: {e}")
         return {"insights": ["Keep tracking your finances to unlock AI-powered insights!"]}
 
+def calculate_income_streak(income_dates):
+    """Calculate current income streak in days"""
+    if not income_dates:
+        return 0
+    
+    # Sort dates in descending order
+    sorted_dates = sorted(income_dates, reverse=True)
+    current_date = datetime.now(timezone.utc).date()
+    
+    streak = 0
+    check_date = current_date
+    
+    for income_date in sorted_dates:
+        income_day = income_date.date() if hasattr(income_date, 'date') else income_date
+        
+        # Check if there's income on this day or previous days
+        days_diff = (check_date - income_day).days
+        
+        if days_diff <= 1:  # Income within last day
+            streak += 1
+            check_date = income_day - timedelta(days=1)
+        else:
+            break
+    
+    return streak
+
 # Enhanced Authentication Routes with Comprehensive OTP Security
+@api_router.get("/auth/trending-skills")
+async def get_trending_skills():
+    """Get trending skills for registration and profile updates"""
+    trending_skills = [
+        {"name": "Freelancing", "category": "Business", "icon": "💼"},
+        {"name": "Graphic Design", "category": "Creative", "icon": "🎨"},
+        {"name": "Coding", "category": "Technical", "icon": "💻"},
+        {"name": "Digital Marketing", "category": "Marketing", "icon": "📱"},
+        {"name": "Content Writing", "category": "Creative", "icon": "✍️"},
+        {"name": "Video Editing", "category": "Creative", "icon": "🎬"},
+        {"name": "AI Tools & Automation", "category": "Technical", "icon": "🤖"},
+        {"name": "Social Media Management", "category": "Marketing", "icon": "📊"}
+    ]
+    return {"trending_skills": trending_skills}
+
+@api_router.get("/auth/avatars")
+async def get_available_avatars():
+    """Get available avatar options"""
+    avatars = [
+        {"value": "boy", "label": "Boy", "category": "youth"},
+        {"value": "man", "label": "Man", "category": "adult"},
+        {"value": "girl", "label": "Girl", "category": "youth"},
+        {"value": "woman", "label": "Woman", "category": "adult"},
+        {"value": "grandfather", "label": "Grandfather (GF)", "category": "senior"},
+        {"value": "grandmother", "label": "Grandmother (GM)", "category": "senior"}
+    ]
+    return {"avatars": avatars}
+
 @api_router.post("/auth/register")
 @limiter.limit("5/minute")
 async def register_user(request: Request, user_data: UserCreate):
@@ -284,7 +485,7 @@ async def register_user(request: Request, user_data: UserCreate):
         user = User(**user_doc)
         
         return {
-            "message": "Registration successful! You can now start using EarnWise.",
+            "message": "Registration successful! Welcome to EarnNest - Your journey to financial success starts now!",
             "token": token,
             "user": user.dict(),
             "email": user_data.email
@@ -493,35 +694,6 @@ async def update_user_profile(request: Request, updated_data: UserUpdate, user_i
     except Exception as e:
         logger.error(f"Profile update error: {str(e)}")
         raise HTTPException(status_code=500, detail="Profile update failed")
-
-@api_router.post("/user/profile/photo")
-@limiter.limit("5/minute")
-async def upload_profile_photo(request: Request, file: UploadFile = File(...), user_id: str = Depends(get_current_user)):
-    """Upload profile photo with validation"""
-    try:
-        # Validate file
-        validate_file_upload(file.filename, file.size)
-        
-        # Generate unique filename
-        file_extension = file.filename.split('.')[-1]
-        filename = f"profile_{user_id}_{uuid.uuid4()}.{file_extension}"
-        file_path = UPLOADS_DIR / filename
-        
-        # Save file
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        # Update user profile
-        photo_url = f"/uploads/{filename}"
-        await update_user(user_id, {"profile_photo": photo_url})
-        
-        return {"message": "Profile photo uploaded successfully", "photo_url": photo_url}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Photo upload error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Photo upload failed")
 
 # Transaction Routes
 @api_router.post("/transactions", response_model=Transaction)
@@ -873,9 +1045,70 @@ async def delete_budget_endpoint(request: Request, budget_id: str, user_id: str 
 @api_router.get("/analytics/insights")
 @limiter.limit("10/minute")
 async def get_analytics_insights_endpoint(request: Request, user_id: str = Depends(get_current_user)):
-    """Get AI-powered financial insights"""
-    insights = await get_financial_insights(user_id)
+    """Get dynamic AI-powered financial insights"""
+    insights = await get_dynamic_financial_insights(user_id)
     return insights
+
+# Financial Goals Routes
+@api_router.post("/financial-goals", response_model=FinancialGoal)
+@limiter.limit("10/minute")
+async def create_financial_goal_endpoint(request: Request, goal_data: FinancialGoalCreate, user_id: str = Depends(get_current_user)):
+    """Create financial goal"""
+    try:
+        goal_dict = goal_data.dict()
+        goal_dict["user_id"] = user_id
+        goal_dict["name"] = sanitize_input(goal_dict["name"])
+        if goal_dict.get("description"):
+            goal_dict["description"] = sanitize_input(goal_dict["description"])
+        
+        goal = FinancialGoal(**goal_dict)
+        await create_financial_goal(goal.dict())
+        
+        return goal
+        
+    except Exception as e:
+        logger.error(f"Financial goal creation error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Financial goal creation failed")
+
+@api_router.get("/financial-goals", response_model=List[FinancialGoal])
+@limiter.limit("20/minute")
+async def get_financial_goals_endpoint(request: Request, user_id: str = Depends(get_current_user)):
+    """Get user's financial goals"""
+    goals = await get_user_financial_goals(user_id)
+    return [FinancialGoal(**g) for g in goals]
+
+@api_router.put("/financial-goals/{goal_id}")
+@limiter.limit("10/minute")
+async def update_financial_goal_endpoint(request: Request, goal_id: str, goal_update: FinancialGoalUpdate, user_id: str = Depends(get_current_user)):
+    """Update financial goal"""
+    try:
+        update_data = {k: v for k, v in goal_update.dict().items() if v is not None}
+        
+        if "name" in update_data:
+            update_data["name"] = sanitize_input(update_data["name"])
+        if "description" in update_data:
+            update_data["description"] = sanitize_input(update_data["description"])
+        
+        if update_data:
+            await update_financial_goal(goal_id, user_id, update_data)
+        
+        return {"message": "Financial goal updated successfully"}
+        
+    except Exception as e:
+        logger.error(f"Financial goal update error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Financial goal update failed")
+
+@api_router.delete("/financial-goals/{goal_id}")
+@limiter.limit("10/minute")
+async def delete_financial_goal_endpoint(request: Request, goal_id: str, user_id: str = Depends(get_current_user)):
+    """Delete financial goal"""
+    try:
+        await delete_financial_goal(goal_id, user_id)
+        return {"message": "Financial goal deleted successfully"}
+        
+    except Exception as e:
+        logger.error(f"Financial goal deletion error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Financial goal deletion failed")
 
 @api_router.get("/analytics/leaderboard")
 @limiter.limit("20/minute")
@@ -943,7 +1176,7 @@ logger = logging.getLogger(__name__)
 async def startup_event():
     """Initialize database on startup"""
     await init_database()
-    logger.info("EarnWise Production Server started successfully")
+    logger.info("EarnNest Production Server started successfully")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

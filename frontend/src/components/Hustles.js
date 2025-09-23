@@ -339,7 +339,7 @@ const Hustles = () => {
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900">Featured Opportunities</h2>
-                  <p className="text-gray-600">Curated by EarnWise team</p>
+                  <p className="text-gray-600">Curated by EarnNest team</p>
                 </div>
               </div>
 

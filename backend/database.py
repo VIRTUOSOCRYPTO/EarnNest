@@ -60,6 +60,12 @@ async def init_database():
         await db.password_resets.create_index("email")
         await db.password_resets.create_index("expires_at", expireAfterSeconds=0)
         
+        # Financial goals collection indexes
+        await db.financial_goals.create_index("user_id")
+        await db.financial_goals.create_index("category")
+        await db.financial_goals.create_index("is_active")
+        await db.financial_goals.create_index([("user_id", 1), ("category", 1)])
+        
         logger.info("Database indexes created successfully")
         
         # Clean up test/dummy data
@@ -231,3 +237,28 @@ async def get_password_reset_code(email: str):
 async def delete_password_reset_code(email: str):
     """Delete password reset code"""
     await db.password_resets.delete_one({"email": email})
+
+# Financial Goals Database Functions
+async def create_financial_goal(goal_data: dict):
+    """Create financial goal"""
+    goal_data["created_at"] = datetime.now(timezone.utc)
+    return await db.financial_goals.insert_one(goal_data)
+
+async def get_user_financial_goals(user_id: str):
+    """Get user's financial goals"""
+    cursor = db.financial_goals.find({"user_id": user_id, "is_active": True}).sort("created_at", -1)
+    return await cursor.to_list(None)
+
+async def update_financial_goal(goal_id: str, user_id: str, update_data: dict):
+    """Update financial goal"""
+    return await db.financial_goals.update_one(
+        {"id": goal_id, "user_id": user_id},
+        {"$set": update_data}
+    )
+
+async def delete_financial_goal(goal_id: str, user_id: str):
+    """Delete financial goal"""
+    return await db.financial_goals.update_one(
+        {"id": goal_id, "user_id": user_id},
+        {"$set": {"is_active": False}}
+    )

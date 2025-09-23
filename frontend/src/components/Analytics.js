@@ -28,6 +28,9 @@ const Analytics = () => {
   const { user } = useAuth();
   const [insights, setInsights] = useState({});
   const [summary, setSummary] = useState({});
+  const [goals, setGoals] = useState([]);
+  const [editingGoal, setEditingGoal] = useState(null);
+  const [goalForm, setGoalForm] = useState({ name: '', target_amount: '', description: '' });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -234,7 +237,7 @@ const Analytics = () => {
                   <p className="text-sm text-gray-600">Days with recorded income</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-2xl font-bold text-yellow-600">{user?.current_streak || 0}</p>
+                  <p className="text-2xl font-bold text-yellow-600">{insights?.income_streak || 0}</p>
                   <p className="text-xs text-yellow-700">days</p>
                 </div>
               </div>

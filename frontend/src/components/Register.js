@@ -23,7 +23,7 @@ const Register = () => {
     full_name: '',
     role: '', // MANDATORY - will be required
     student_level: 'undergraduate',
-    skills: '',
+    skills: [],  // Changed to array for better handling
     availability_hours: 10,
     location: '', // MANDATORY - will be required
     bio: ''
@@ -39,8 +39,62 @@ const Register = () => {
     feedback: []
   });
   const [passwordsMatch, setPasswordsMatch] = useState(true);
+  const [trendingSkills, setTrendingSkills] = useState([]);
+  const [customSkill, setCustomSkill] = useState('');
   
   const { login } = useAuth();
+
+  // Fetch trending skills on component mount
+  useEffect(() => {
+    const fetchTrendingSkills = async () => {
+      try {
+        const response = await axios.get(`${API}/auth/trending-skills`);
+        setTrendingSkills(response.data.trending_skills || response.data);
+      } catch (error) {
+        console.error('Error fetching trending skills:', error);
+        // Set default skills if API fails
+        setTrendingSkills([
+          { name: 'Freelancing', category: 'Business' },
+          { name: 'Graphic Design', category: 'Creative' },
+          { name: 'Coding', category: 'Technical' },
+          { name: 'Digital Marketing', category: 'Marketing' },
+          { name: 'Content Writing', category: 'Creative' },
+          { name: 'Video Editing', category: 'Creative' },
+          { name: 'AI Tools & Automation', category: 'Technical' },
+          { name: 'Social Media Management', category: 'Marketing' }
+        ]);
+      }
+    };
+    
+    fetchTrendingSkills();
+  }, []);
+
+  // Skills management functions
+  const toggleSkill = (skillName) => {
+    setFormData(prev => ({
+      ...prev,
+      skills: prev.skills.includes(skillName) 
+        ? prev.skills.filter(skill => skill !== skillName)
+        : [...prev.skills, skillName]
+    }));
+  };
+
+  const addCustomSkill = () => {
+    if (customSkill.trim() && !formData.skills.includes(customSkill.trim())) {
+      setFormData(prev => ({
+        ...prev,
+        skills: [...prev.skills, customSkill.trim()]
+      }));
+      setCustomSkill('');
+    }
+  };
+
+  const removeSkill = (skillToRemove) => {
+    setFormData(prev => ({
+      ...prev,
+      skills: prev.skills.filter(skill => skill !== skillToRemove)
+    }));
+  };
 
   // Password strength checking
   useEffect(() => {
@@ -159,6 +213,12 @@ const Register = () => {
       return false;
     }
 
+    // Mandatory skills validation
+    if (!formData.skills || formData.skills.length === 0) {
+      setError('At least one skill must be selected');
+      return false;
+    }
+
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
       setError('Please enter a valid email address');
@@ -179,7 +239,7 @@ const Register = () => {
     try {
       const submitData = {
         ...formData,
-        skills: formData.skills.split(',').map(skill => skill.trim()).filter(skill => skill),
+        skills: formData.skills, // Skills is already an array
         availability_hours: parseInt(formData.availability_hours)
       };
       delete submitData.confirmPassword;
@@ -225,7 +285,7 @@ const Register = () => {
                 <span className="text-white font-bold text-xl">₹</span>
               </div>
             </div>
-            <h1 className="text-4xl font-bold gradient-text mb-2">Join EarnWise</h1>
+            <h1 className="text-4xl font-bold gradient-text mb-2">Join EarnNest</h1>
             <p className="text-gray-600">Start your journey to financial success</p>
           </div>
 
@@ -454,18 +514,91 @@ const Register = () => {
               </div>
             </div>
 
+            {/* Skills Selection Section */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Skills (comma separated)
+              <label className="block text-sm font-semibold text-gray-700 mb-4">
+                Skills Selection *
+                <span className="text-red-500 ml-1">
+                  (Select at least one skill)
+                </span>
               </label>
-              <input
-                type="text"
-                name="skills"
-                value={formData.skills}
-                onChange={handleChange}
-                className="input-modern"
-                placeholder="e.g., Python, Writing, Design, Tutoring"
-              />
+              
+              {/* Trending Skills Grid */}
+              <div className="mb-4">
+                <h4 className="text-sm font-medium text-gray-600 mb-3">Trending Skills</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {trendingSkills.map((skill) => (
+                    <button
+                      key={skill.name}
+                      type="button"
+                      onClick={() => toggleSkill(skill.name)}
+                      className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
+                        formData.skills.includes(skill.name)
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                          : 'border-gray-200 bg-white text-gray-700 hover:border-emerald-300 hover:bg-emerald-50'
+                      }`}
+                    >
+                      <div className="text-center">
+                        <div className="font-semibold">{skill.name}</div>
+                        <div className="text-xs text-gray-500 mt-1">{skill.category}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Custom Skills Input */}
+              <div className="mb-4">
+                <h4 className="text-sm font-medium text-gray-600 mb-2">Add Custom Skill</h4>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={customSkill}
+                    onChange={(e) => setCustomSkill(e.target.value)}
+                    className="input-modern flex-1"
+                    placeholder="Enter a custom skill"
+                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addCustomSkill())}
+                  />
+                  <button
+                    type="button"
+                    onClick={addCustomSkill}
+                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+
+              {/* Selected Skills Display */}
+              {formData.skills.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-medium text-gray-600 mb-2">Selected Skills ({formData.skills.length})</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {formData.skills.map((skill) => (
+                      <span
+                        key={skill}
+                        className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-emerald-100 text-emerald-800"
+                      >
+                        {skill}
+                        <button
+                          type="button"
+                          onClick={() => removeSkill(skill)}
+                          className="ml-2 text-emerald-600 hover:text-emerald-800"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Skills Validation Error */}
+              {formData.skills.length === 0 && (
+                <p className="text-red-500 text-sm mt-2">
+                  ⚠️ Please select at least one skill to continue
+                </p>
+              )}
             </div>
 
             <div>
@@ -493,7 +626,8 @@ const Register = () => {
                 !passwordsMatch || 
                 passwordStrength.score < 40 || 
                 !formData.role || 
-                !formData.location.trim()
+                !formData.location.trim() ||
+                formData.skills.length === 0  // Add skills validation
               }
               className="btn-primary w-full flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
             >

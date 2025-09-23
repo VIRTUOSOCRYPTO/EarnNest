@@ -11,6 +11,18 @@ class User(BaseModel):
     role: str  # "Student", "Professional", "Other" - MANDATORY
     student_level: str  # "undergraduate", "graduate", "high_school"
     skills: List[str] = []
+
+    @validator('skills')
+    def validate_skills(cls, v):
+        if not v or len(v) == 0:
+            raise ValueError('At least one skill is required')
+        
+        # Check if all skills are valid (not empty)
+        valid_skills = [skill.strip() for skill in v if skill.strip()]
+        if len(valid_skills) == 0:
+            raise ValueError('At least one valid skill is required')
+        
+        return valid_skills
     availability_hours: int = 10  # hours per week
     location: str  # MANDATORY - cannot be empty, must be valid location format
     bio: Optional[str] = None
@@ -117,6 +129,18 @@ class UserCreate(BaseModel):
         if not re.match(r'^[a-zA-Z\s.]+$', v):
             raise ValueError('Full name can only contain letters, spaces, and periods')
         return v.strip()
+
+    @validator('skills')
+    def validate_skills(cls, v):
+        if not v or len(v) == 0:
+            raise ValueError('At least one skill is required')
+        
+        # Check if all skills are valid (not empty)
+        valid_skills = [skill.strip() for skill in v if skill.strip()]
+        if len(valid_skills) == 0:
+            raise ValueError('At least one valid skill is required')
+        
+        return valid_skills
 
     @validator('bio')
     def validate_bio(cls, v):
@@ -395,6 +419,29 @@ class BudgetCreate(BaseModel):
             raise ValueError('Category must be at least 2 characters long')
         return v.strip()
 
+class BudgetUpdate(BaseModel):
+    category: Optional[str] = None
+    allocated_amount: Optional[float] = None
+    month: Optional[str] = None
+
+    @validator('category')
+    def validate_category(cls, v):
+        if v is not None:
+            if len(v.strip()) < 2:
+                raise ValueError('Category must be at least 2 characters long')
+            return v.strip()
+        return v
+
+    @validator('allocated_amount')
+    def validate_amount(cls, v):
+        if v is not None:
+            if v <= 0:
+                raise ValueError('Allocated amount must be greater than 0')
+            if v > 10000000:  # 1 crore limit
+                raise ValueError('Allocated amount cannot exceed ₹1,00,00,000')
+            return round(v, 2)
+        return v
+
 class AdminHustleCreate(BaseModel):
     title: str
     description: str
@@ -415,4 +462,74 @@ class AdminHustleCreate(BaseModel):
             
             if not (re.match(email_pattern, v) or re.match(phone_pattern, v) or re.match(url_pattern, v)):
                 raise ValueError('Application link must be a valid email, phone number, or website URL')
+        return v
+
+# Financial Goals Models
+class FinancialGoal(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    name: str
+    category: str  # "emergency_fund", "monthly_income", "graduation", "custom"
+    target_amount: float = Field(gt=0, le=50000000)  # Up to ₹5 crores
+    current_amount: float = Field(default=0.0, ge=0)
+    description: Optional[str] = None
+    target_date: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    is_completed: bool = False
+    
+    @validator('category')
+    def validate_category(cls, v):
+        allowed_categories = ["emergency_fund", "monthly_income", "graduation", "custom"]
+        if v not in allowed_categories:
+            raise ValueError(f'Category must be one of: {", ".join(allowed_categories)}')
+        return v
+    
+    @validator('name')
+    def validate_name(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Goal name is required')
+        if len(v.strip()) > 100:
+            raise ValueError('Goal name must be less than 100 characters')
+        return v.strip()
+
+class FinancialGoalCreate(BaseModel):
+    name: str
+    category: str
+    target_amount: float = Field(gt=0, le=50000000)
+    current_amount: float = Field(default=0.0, ge=0)
+    description: Optional[str] = None
+    target_date: Optional[datetime] = None
+    
+    @validator('category')
+    def validate_category(cls, v):
+        allowed_categories = ["emergency_fund", "monthly_income", "graduation", "custom"]
+        if v not in allowed_categories:
+            raise ValueError(f'Category must be one of: {", ".join(allowed_categories)}')
+        return v
+    
+    @validator('name')
+    def validate_name(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Goal name is required')
+        if len(v.strip()) > 100:
+            raise ValueError('Goal name must be less than 100 characters')
+        return v.strip()
+
+class FinancialGoalUpdate(BaseModel):
+    name: Optional[str] = None
+    target_amount: Optional[float] = Field(None, gt=0, le=50000000)
+    current_amount: Optional[float] = Field(None, ge=0)
+    description: Optional[str] = None
+    target_date: Optional[datetime] = None
+    is_completed: Optional[bool] = None
+    
+    @validator('name')
+    def validate_name(cls, v):
+        if v is not None:
+            if not v or not v.strip():
+                raise ValueError('Goal name cannot be empty')
+            if len(v.strip()) > 100:
+                raise ValueError('Goal name must be less than 100 characters')
+            return v.strip()
         return v

@@ -25,20 +25,23 @@ const Dashboard = () => {
   });
   const [recentTransactions, setRecentTransactions] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
+  const [insights, setInsights] = useState({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [summaryRes, transactionsRes, leaderboardRes] = await Promise.all([
+        const [summaryRes, transactionsRes, leaderboardRes, insightsRes] = await Promise.all([
           axios.get(`${API}/transactions/summary`),
           axios.get(`${API}/transactions?limit=5`),
-          axios.get(`${API}/analytics/leaderboard`)
+          axios.get(`${API}/analytics/leaderboard`),
+          axios.get(`${API}/analytics/insights`)
         ]);
 
         setSummary(summaryRes.data);
         setRecentTransactions(transactionsRes.data);
         setLeaderboard(leaderboardRes.data);
+        setInsights(insightsRes.data);
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       } finally {
@@ -234,7 +237,7 @@ const Dashboard = () => {
             
             <div className="grid grid-cols-2 gap-4">
               <div className="text-center p-3 bg-emerald-50 rounded-lg">
-                <p className="text-2xl font-bold text-emerald-600">{user?.current_streak || 0}</p>
+                <p className="text-2xl font-bold text-emerald-600">{insights?.income_streak || 0}</p>
                 <p className="text-sm text-emerald-700">Income Streak</p>
               </div>
               <div className="text-center p-3 bg-purple-50 rounded-lg">

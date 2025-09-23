@@ -5,7 +5,6 @@ import {
   HomeIcon, 
   CreditCardIcon,
   BanknotesIcon,
-  TargetIcon,
   BriefcaseIcon, 
   ChartBarIcon, 
   ArrowRightOnRectangleIcon,
@@ -22,7 +21,6 @@ const Navigation = () => {
     { path: '/dashboard', label: 'Dashboard', icon: HomeIcon },
     { path: '/transactions', label: 'Transactions', icon: CreditCardIcon },
     { path: '/budget', label: 'Budget', icon: BanknotesIcon },
-    { path: '/goals', label: 'Goals', icon: TargetIcon },
     { path: '/hustles', label: 'Side Hustles', icon: BriefcaseIcon },
     { path: '/analytics', label: 'Analytics', icon: ChartBarIcon },
   ];

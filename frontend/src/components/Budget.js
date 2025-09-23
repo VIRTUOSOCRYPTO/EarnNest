@@ -17,6 +17,8 @@ const Budget = () => {
   const [budgets, setBudgets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAllocationForm, setShowAllocationForm] = useState(false);
+  const [editingBudget, setEditingBudget] = useState(null);
+  const [editForm, setEditForm] = useState({ category: '', allocated_amount: '' });
   const [totalAllocation, setTotalAllocation] = useState('');
   
   // Default categories for students
@@ -140,6 +142,36 @@ const Budget = () => {
         console.error('Error deleting budget:', error);
       }
     }
+  };
+
+  const editBudget = (budget) => {
+    setEditingBudget(budget.id);
+    setEditForm({
+      category: budget.category,
+      allocated_amount: budget.allocated_amount.toString()
+    });
+  };
+
+  const updateBudget = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.put(`${API}/budgets/${editingBudget}`, {
+        category: editForm.category,
+        allocated_amount: parseFloat(editForm.allocated_amount)
+      });
+      
+      setEditingBudget(null);
+      setEditForm({ category: '', allocated_amount: '' });
+      fetchBudgets();
+    } catch (error) {
+      console.error('Error updating budget:', error);
+      alert('Error updating budget. Please try again.');
+    }
+  };
+
+  const cancelEdit = () => {
+    setEditingBudget(null);
+    setEditForm({ category: '', allocated_amount: '' });
   };
 
   if (loading) {
@@ -303,47 +335,115 @@ const Budget = () => {
                 className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 slide-up"
                 style={{ animationDelay: `${index * 0.1}s` }}
               >
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-bold text-gray-900">{budget.category}</h3>
-                  <ChartBarIcon className="w-6 h-6 text-emerald-500" />
-                </div>
-                
-                <div className="space-y-3">
-                  <div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Allocated</span>
-                      <span className="font-medium">{formatCurrency(budget.allocated_amount)}</span>
+                {editingBudget === budget.id ? (
+                  // Edit Form
+                  <form onSubmit={updateBudget} className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Category
+                      </label>
+                      <input
+                        type="text"
+                        value={editForm.category}
+                        onChange={(e) => setEditForm({...editForm, category: e.target.value})}
+                        className="input-modern"
+                        required
+                      />
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Spent</span>
-                      <span className="font-medium text-red-500">{formatCurrency(budget.spent_amount)}</span>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Allocated Amount
+                      </label>
+                      <input
+                        type="number"
+                        value={editForm.allocated_amount}
+                        onChange={(e) => setEditForm({...editForm, allocated_amount: e.target.value})}
+                        className="input-modern"
+                        step="0.01"
+                        min="0"
+                        required
+                      />
                     </div>
-                    <div className="flex justify-between text-sm font-semibold">
-                      <span className="text-gray-700">Remaining</span>
-                      <span className={`${budget.allocated_amount - budget.spent_amount >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                        {formatCurrency(budget.allocated_amount - budget.spent_amount)}
-                      </span>
+                    <div className="flex gap-2">
+                      <button
+                        type="submit"
+                        className="btn-primary flex-1 text-sm py-2"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={cancelEdit}
+                        className="btn-secondary flex-1 text-sm py-2"
+                      >
+                        Cancel
+                      </button>
                     </div>
-                  </div>
+                  </form>
+                ) : (
+                  // Display Mode
+                  <>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-bold text-gray-900">{budget.category}</h3>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => editBudget(budget)}
+                          className="text-gray-500 hover:text-emerald-600 transition-colors"
+                          title="Edit Budget"
+                        >
+                          <PencilIcon className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => deleteBudget(budget.id)}
+                          className="text-gray-500 hover:text-red-600 transition-colors"
+                          title="Delete Budget"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Allocated</span>
+                          <span className="font-semibold text-gray-900">{formatCurrency(budget.allocated_amount)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Spent</span>
+                          <span className="font-semibold text-red-500">{formatCurrency(budget.spent_amount)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm border-t pt-2">
+                          <span className="font-medium text-gray-700">Remaining</span>
+                          <span className={`font-bold ${budget.allocated_amount - budget.spent_amount >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                            {formatCurrency(budget.allocated_amount - budget.spent_amount)}
+                          </span>
+                        </div>
+                      </div>
 
-                  {/* Progress Bar */}
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className={`h-2 rounded-full ${
-                        budget.spent_amount <= budget.allocated_amount 
-                          ? 'bg-emerald-500' 
-                          : 'bg-red-500'
-                      }`}
-                      style={{
-                        width: `${Math.min((budget.spent_amount / budget.allocated_amount) * 100, 100)}%`
-                      }}
-                    ></div>
-                  </div>
+                      {/* Progress Bar */}
+                      <div className="w-full bg-gray-200 rounded-full h-3">
+                        <div
+                          className={`h-3 rounded-full transition-all duration-300 ${
+                            budget.spent_amount <= budget.allocated_amount 
+                              ? 'bg-emerald-500' 
+                              : 'bg-red-500'
+                          }`}
+                          style={{
+                            width: `${Math.min((budget.spent_amount / budget.allocated_amount) * 100, 100)}%`
+                          }}
+                        ></div>
+                      </div>
 
-                  <div className="text-xs text-gray-500">
-                    {budget.month} • {Math.round((budget.spent_amount / budget.allocated_amount) * 100)}% used
-                  </div>
-                </div>
+                      <div className="flex justify-between items-center text-xs text-gray-500">
+                        <span>{budget.month}</span>
+                        <span className="font-medium">
+                          {Math.round((budget.spent_amount / budget.allocated_amount) * 100)}% used
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             ))}
           </div>

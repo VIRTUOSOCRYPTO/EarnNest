@@ -5,6 +5,7 @@ import {
   HomeIcon, 
   CreditCardIcon,
   BanknotesIcon,
+  TargetIcon,
   BriefcaseIcon, 
   ChartBarIcon, 
   ArrowRightOnRectangleIcon,
@@ -21,6 +22,7 @@ const Navigation = () => {
     { path: '/dashboard', label: 'Dashboard', icon: HomeIcon },
     { path: '/transactions', label: 'Transactions', icon: CreditCardIcon },
     { path: '/budget', label: 'Budget', icon: BanknotesIcon },
+    { path: '/goals', label: 'Goals', icon: TargetIcon },
     { path: '/hustles', label: 'Side Hustles', icon: BriefcaseIcon },
     { path: '/analytics', label: 'Analytics', icon: ChartBarIcon },
   ];
@@ -39,7 +41,7 @@ const Navigation = () => {
             <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-green-600 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-sm">₹</span>
             </div>
-            <h1 className="text-2xl font-bold gradient-text">EarnWise</h1>
+            <h1 className="text-2xl font-bold gradient-text">EarnNest</h1>
           </div>
 
           {/* Navigation Links */}

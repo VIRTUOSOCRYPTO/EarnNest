@@ -746,10 +746,21 @@ async def create_transaction_endpoint(request: Request, transaction_data: Transa
             transaction = Transaction(**transaction_dict)
             await create_transaction(transaction.dict())
             
-            # Update user's total earnings if it's income
+            # Update user's total earnings and current streak if it's income
             await db.users.update_one(
                 {"id": user_id},
                 {"$inc": {"total_earnings": transaction.amount}}
+            )
+            
+            # Recalculate and update income streak
+            user_transactions = await get_user_transactions(user_id, limit=1000)
+            income_transactions = [t for t in user_transactions if t["type"] == "income"]
+            income_dates = [t["date"] for t in income_transactions]
+            current_streak = calculate_income_streak(income_dates)
+            
+            await db.users.update_one(
+                {"id": user_id},
+                {"$set": {"current_streak": current_streak}}
             )
         
         return transaction
@@ -1040,6 +1051,38 @@ async def delete_budget_endpoint(request: Request, budget_id: str, user_id: str 
     except Exception as e:
         logger.error(f"Budget deletion error: {str(e)}")
         raise HTTPException(status_code=500, detail="Budget deletion failed")
+
+@api_router.put("/budgets/{budget_id}", response_model=Budget)
+@limiter.limit("10/minute")
+async def update_budget_endpoint(request: Request, budget_id: str, budget_update: BudgetUpdate, user_id: str = Depends(get_current_user)):
+    """Update budget allocation"""
+    try:
+        # Verify budget belongs to user
+        budget = await db.budgets.find_one({"id": budget_id, "user_id": user_id})
+        if not budget:
+            raise HTTPException(status_code=404, detail="Budget not found")
+        
+        # Prepare update data
+        update_data = {k: v for k, v in budget_update.dict().items() if v is not None}
+        
+        if "category" in update_data:
+            update_data["category"] = sanitize_input(update_data["category"])
+        
+        # Update the budget
+        await db.budgets.update_one(
+            {"id": budget_id, "user_id": user_id}, 
+            {"$set": update_data}
+        )
+        
+        # Return updated budget
+        updated_budget = await db.budgets.find_one({"id": budget_id, "user_id": user_id})
+        return Budget(**updated_budget)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Budget update error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Budget update failed")
 
 # Analytics Routes
 @api_router.get("/analytics/insights")

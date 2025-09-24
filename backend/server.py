@@ -422,6 +422,51 @@ def calculate_income_streak(income_dates, registration_date=None):
     
     return len(income_days)
 
+async def update_monthly_income_goal_progress(user_id: str):
+    """Update Monthly Income Goal progress based on actual income transactions"""
+    try:
+        # Find the monthly income goal
+        monthly_goal = await db.financial_goals.find_one({
+            "user_id": user_id,
+            "category": "monthly_income",
+            "is_active": True
+        })
+        
+        if not monthly_goal:
+            return  # No monthly income goal to update
+        
+        # Calculate current month's income
+        current_month = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        next_month = current_month.replace(month=current_month.month + 1) if current_month.month < 12 else current_month.replace(year=current_month.year + 1, month=1)
+        
+        # Get income transactions for current month
+        income_transactions = await db.transactions.find({
+            "user_id": user_id,
+            "type": "income",
+            "date": {"$gte": current_month, "$lt": next_month}
+        }).to_list(None)
+        
+        # Calculate total monthly income
+        monthly_income = sum(transaction["amount"] for transaction in income_transactions)
+        
+        # Update the goal's current amount
+        await db.financial_goals.update_one(
+            {"_id": monthly_goal["_id"]},
+            {
+                "$set": {
+                    "current_amount": monthly_income,
+                    "updated_at": datetime.now(timezone.utc),
+                    "is_completed": monthly_income >= monthly_goal["target_amount"]
+                }
+            }
+        )
+        
+        logger.info(f"Updated monthly income goal for user {user_id}: ₹{monthly_income}/₹{monthly_goal['target_amount']}")
+        
+    except Exception as e:
+        logger.error(f"Error updating monthly income goal: {e}")
+        # Don't raise exception as this is a background update
+
 # Enhanced Authentication Routes with Comprehensive OTP Security
 @api_router.get("/auth/trending-skills")
 async def get_trending_skills():
@@ -874,6 +919,9 @@ async def create_transaction_endpoint(request: Request, transaction_data: Transa
                 {"id": user_id},
                 {"$set": {"current_streak": current_streak}}
             )
+
+            # Update Monthly Income Goal progress automatically
+            await update_monthly_income_goal_progress(user_id)
         
         return transaction
         

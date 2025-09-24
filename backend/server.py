@@ -309,10 +309,10 @@ async def get_dynamic_financial_insights(user_id: str) -> Dict[str, Any]:
                 "remaining": goal["target_amount"] - goal["current_amount"]
             }
         
-        # Income streak calculation
+        # Income streak calculation (days with income since registration)
         income_transactions = [t for t in transactions if t["type"] == "income"]
         income_dates = [t["date"] for t in income_transactions]
-        income_streak = calculate_income_streak(income_dates)
+        income_streak = calculate_income_streak(income_dates, user_doc.get("created_at"))
         
         # Generate dynamic insights
         insights = []
@@ -386,31 +386,41 @@ async def get_dynamic_financial_insights(user_id: str) -> Dict[str, Any]:
         logging.error(f"Dynamic financial insights error: {e}")
         return {"insights": ["Keep tracking your finances to unlock AI-powered insights!"]}
 
-def calculate_income_streak(income_dates):
-    """Calculate current income streak in days"""
+def calculate_income_streak(income_dates, registration_date=None):
+    """Calculate income days since registration"""
     if not income_dates:
         return 0
     
-    # Sort dates in descending order
-    sorted_dates = sorted(income_dates, reverse=True)
-    current_date = datetime.now(timezone.utc).date()
+    # If no registration date provided, fall back to old logic
+    if not registration_date:
+        sorted_dates = sorted(income_dates, reverse=True)
+        current_date = datetime.now(timezone.utc).date()
+        
+        streak = 0
+        check_date = current_date
+        
+        for income_date in sorted_dates:
+            income_day = income_date.date() if hasattr(income_date, 'date') else income_date
+            days_diff = (check_date - income_day).days
+            
+            if days_diff <= 1:
+                streak += 1
+                check_date = income_day - timedelta(days=1)
+            else:
+                break
+        return streak
     
-    streak = 0
-    check_date = current_date
+    # New logic: Count days with income since registration
+    reg_date = registration_date.date() if hasattr(registration_date, 'date') else registration_date
     
-    for income_date in sorted_dates:
+    # Get unique income days since registration
+    income_days = set()
+    for income_date in income_dates:
         income_day = income_date.date() if hasattr(income_date, 'date') else income_date
-        
-        # Check if there's income on this day or previous days
-        days_diff = (check_date - income_day).days
-        
-        if days_diff <= 1:  # Income within last day
-            streak += 1
-            check_date = income_day - timedelta(days=1)
-        else:
-            break
+        if income_day >= reg_date:
+            income_days.add(income_day)
     
-    return streak
+    return len(income_days)
 
 # Enhanced Authentication Routes with Comprehensive OTP Security
 @api_router.get("/auth/trending-skills")
@@ -663,10 +673,111 @@ async def reset_password(request: Request, reset_data: dict):
 @api_router.get("/user/profile", response_model=User)
 @limiter.limit("30/minute")
 async def get_user_profile(request: Request, user_id: str = Depends(get_current_user)):
-    """Get user profile"""
+    """Get user profile with auto-calculated earnings and achievements"""
     user_doc = await get_user_by_id(user_id)
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    # Calculate total earnings from transactions
+    transactions = await get_user_transactions(user_id, limit=1000)
+    total_earnings = sum(t["amount"] for t in transactions if t["type"] == "income")
+    total_expenses = sum(t["amount"] for t in transactions if t["type"] == "expense")
+    net_savings = total_earnings - total_expenses
+    
+    # Calculate achievements
+    achievements = []
+    
+    # Income-based achievements
+    if total_earnings >= 100000:
+        achievements.append({
+            "id": "lakh_earner",
+            "title": "Lakh Earner",
+            "description": "Earned ₹1 Lakh or more",
+            "icon": "💰",
+            "earned": True,
+            "category": "earnings"
+        })
+    elif total_earnings >= 50000:
+        achievements.append({
+            "id": "fifty_k_earner",
+            "title": "Growing Earner",
+            "description": "Earned ₹50,000 or more",
+            "icon": "💵",
+            "earned": True,
+            "category": "earnings"
+        })
+    elif total_earnings >= 10000:
+        achievements.append({
+            "id": "first_ten_k",
+            "title": "First 10K",
+            "description": "Earned your first ₹10,000",
+            "icon": "💸",
+            "earned": True,
+            "category": "earnings"
+        })
+    
+    # Streak-based achievements
+    income_transactions = [t for t in transactions if t["type"] == "income"]
+    income_dates = [t["date"] for t in income_transactions]
+    current_streak = calculate_income_streak(income_dates, user_doc.get("created_at"))
+    
+    if current_streak >= 30:
+        achievements.append({
+            "id": "month_streaker",
+            "title": "Monthly Streaker",
+            "description": "30+ days with income",
+            "icon": "🔥",
+            "earned": True,
+            "category": "consistency"
+        })
+    elif current_streak >= 7:
+        achievements.append({
+            "id": "week_streaker",
+            "title": "Weekly Warrior",
+            "description": "7+ days with income",
+            "icon": "⚡",
+            "earned": True,
+            "category": "consistency"
+        })
+    
+    # Savings-based achievements
+    if net_savings >= 50000:
+        achievements.append({
+            "id": "super_saver",
+            "title": "Super Saver",
+            "description": "Saved ₹50,000 or more",
+            "icon": "🏆",
+            "earned": True,
+            "category": "savings"
+        })
+    elif net_savings >= 10000:
+        achievements.append({
+            "id": "good_saver",
+            "title": "Good Saver",
+            "description": "Saved ₹10,000 or more",
+            "icon": "🎯",
+            "earned": True,
+            "category": "savings"
+        })
+    
+    # Update user document with calculated values
+    await db.users.update_one(
+        {"id": user_id},
+        {
+            "$set": {
+                "total_earnings": total_earnings,
+                "net_savings": net_savings,
+                "current_streak": current_streak,
+                "achievements": achievements
+            }
+        }
+    )
+    
+    # Update user_doc with calculated values for response
+    user_doc["total_earnings"] = total_earnings
+    user_doc["net_savings"] = net_savings
+    user_doc["current_streak"] = current_streak
+    user_doc["achievements"] = achievements
     
     del user_doc["password_hash"]
     return User(**user_doc)
@@ -753,10 +864,11 @@ async def create_transaction_endpoint(request: Request, transaction_data: Transa
             )
             
             # Recalculate and update income streak
+            user_doc = await get_user_by_id(user_id)
             user_transactions = await get_user_transactions(user_id, limit=1000)
             income_transactions = [t for t in user_transactions if t["type"] == "income"]
             income_dates = [t["date"] for t in income_transactions]
-            current_streak = calculate_income_streak(income_dates)
+            current_streak = calculate_income_streak(income_dates, user_doc.get("created_at"))
             
             await db.users.update_one(
                 {"id": user_id},
@@ -965,15 +1077,83 @@ async def get_my_applications_endpoint(request: Request, user_id: str = Depends(
 
 @api_router.get("/hustles/categories")
 async def get_hustle_categories_endpoint():
-    """Get hustle categories"""
+    """Get hustle categories with trending indicators"""
     categories = [
-        {"name": "tutoring", "display": "Tutoring & Teaching", "icon": "📚"},
-        {"name": "freelance", "display": "Freelance Work", "icon": "💻"},
-        {"name": "content_creation", "display": "Content Creation", "icon": "🎨"},
-        {"name": "delivery", "display": "Delivery & Transportation", "icon": "🚗"},
-        {"name": "micro_tasks", "display": "Micro Tasks", "icon": "⚡"}
+        {"name": "tutoring", "display": "Tutoring & Teaching", "icon": "📚", "trending": True},
+        {"name": "freelance", "display": "Freelance Work", "icon": "💻", "trending": True},
+        {"name": "content_creation", "display": "Content Creation", "icon": "🎨", "trending": True},
+        {"name": "delivery", "display": "Delivery & Transportation", "icon": "🚗", "trending": False},
+        {"name": "micro_tasks", "display": "Micro Tasks", "icon": "⚡", "trending": True},
+        {"name": "digital_marketing", "display": "Digital Marketing", "icon": "📱", "trending": True},
+        {"name": "graphic_design", "display": "Graphic Design", "icon": "🎨", "trending": True},
+        {"name": "video_editing", "display": "Video Editing", "icon": "🎬", "trending": True},
+        {"name": "social_media", "display": "Social Media Management", "icon": "📊", "trending": True},
+        {"name": "data_entry", "display": "Data Entry", "icon": "📝", "trending": False},
+        {"name": "virtual_assistant", "display": "Virtual Assistant", "icon": "🤝", "trending": True},
+        {"name": "other", "display": "Other", "icon": "💼", "trending": False}
     ]
     return categories
+
+# User Hustle Management Routes
+@api_router.get("/hustles/my-posted")
+@limiter.limit("20/minute")
+async def get_my_posted_hustles_endpoint(request: Request, user_id: str = Depends(get_current_user)):
+    """Get user's own posted hustles"""
+    cursor = db.user_hustles.find({"created_by": user_id}).sort("created_at", -1)
+    hustles = await cursor.to_list(100)
+    return [UserHustle(**hustle) for hustle in hustles]
+
+@api_router.put("/hustles/{hustle_id}")
+@limiter.limit("10/minute")
+async def update_user_hustle_endpoint(request: Request, hustle_id: str, hustle_update: UserHustleUpdate, user_id: str = Depends(get_current_user)):
+    """Update user's posted hustle"""
+    try:
+        # Check if hustle exists and belongs to user
+        existing_hustle = await db.user_hustles.find_one({"id": hustle_id, "created_by": user_id})
+        if not existing_hustle:
+            raise HTTPException(status_code=404, detail="Hustle not found or not authorized")
+        
+        # Prepare update data
+        update_data = {k: v for k, v in hustle_update.dict().items() if v is not None}
+        
+        if "title" in update_data:
+            update_data["title"] = sanitize_input(update_data["title"])
+        if "description" in update_data:
+            update_data["description"] = sanitize_input(update_data["description"])
+        
+        if update_data:
+            await db.user_hustles.update_one(
+                {"id": hustle_id, "created_by": user_id},
+                {"$set": update_data}
+            )
+        
+        return {"message": "Hustle updated successfully"}
+        
+    except Exception as e:
+        logger.error(f"Hustle update error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Hustle update failed")
+
+@api_router.delete("/hustles/{hustle_id}")
+@limiter.limit("10/minute")
+async def delete_user_hustle_endpoint(request: Request, hustle_id: str, user_id: str = Depends(get_current_user)):
+    """Delete user's posted hustle"""
+    try:
+        # Check if hustle exists and belongs to user
+        existing_hustle = await db.user_hustles.find_one({"id": hustle_id, "created_by": user_id})
+        if not existing_hustle:
+            raise HTTPException(status_code=404, detail="Hustle not found or not authorized")
+        
+        # Delete the hustle
+        result = await db.user_hustles.delete_one({"id": hustle_id, "created_by": user_id})
+        
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Hustle not found")
+        
+        return {"message": "Hustle deleted successfully"}
+        
+    except Exception as e:
+        logger.error(f"Hustle deletion error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Hustle deletion failed")
 
 # Budget Routes
 @api_router.get("/budgets/category/{category}")

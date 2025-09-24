@@ -1028,7 +1028,7 @@ async def create_user_hustle_endpoint(request: Request, hustle_data: UserHustleC
         hustle_dict["created_by"] = user_id
         hustle_dict["title"] = sanitize_input(hustle_dict["title"])
         hustle_dict["description"] = sanitize_input(hustle_dict["description"])
-        hustle_dict["contact_info"] = sanitize_input(hustle_dict["contact_info"])
+        # Note: contact_info is a ContactInfo object, not a string, so we don't sanitize it
         
         hustle = UserHustle(**hustle_dict)
         await create_hustle(hustle.dict())

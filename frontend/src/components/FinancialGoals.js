@@ -7,7 +7,7 @@ import {
   TrashIcon,
   CurrencyRupeeIcon,
   CalendarIcon,
-  TargetIcon,
+  StarIcon,
   TrophyIcon,
   ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
@@ -157,7 +157,7 @@ const FinancialGoals = () => {
       <div className="flex items-center justify-between mb-8 fade-in">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center">
-            <TargetIcon className="w-8 h-8 mr-3 text-emerald-600" />
+            <StarIcon className="w-8 h-8 mr-3 text-emerald-600" />
             Financial Goals
           </h1>
           <p className="text-gray-600 mt-1">Set and track your financial objectives</p>
@@ -181,7 +181,7 @@ const FinancialGoals = () => {
       {/* Goals Grid */}
       {goals.length === 0 ? (
         <div className="text-center py-12">
-          <TargetIcon className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+          <StarIcon className="w-16 h-16 mx-auto mb-4 text-gray-300" />
           <h3 className="text-xl font-semibold text-gray-500 mb-2">No Financial Goals Yet</h3>
           <p className="text-gray-400 mb-6">Start by setting your first financial goal to track your progress</p>
           <button

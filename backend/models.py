@@ -26,7 +26,8 @@ class User(BaseModel):
     availability_hours: int = 10  # hours per week
     location: str  # MANDATORY - cannot be empty, must be valid location format
     bio: Optional[str] = None
-    profile_photo: Optional[str] = None
+    avatar: str = "boy"  # MANDATORY - avatar selection (boy, man, girl, woman, grandfather, grandmother)
+    profile_photo: Optional[str] = None  # Keep for backward compatibility
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     total_earnings: float = 0.0
     net_savings: float = 0.0
@@ -72,6 +73,7 @@ class UserCreate(BaseModel):
     availability_hours: int = 10
     location: str  # MANDATORY
     bio: Optional[str] = None
+    avatar: str = "boy"  # MANDATORY - avatar selection
 
     @validator('role')
     def validate_role(cls, v):
@@ -160,6 +162,13 @@ class UserCreate(BaseModel):
                 cleaned_skills.append(cleaned)
         return cleaned_skills
 
+    @validator('avatar')
+    def validate_avatar(cls, v):
+        allowed_avatars = ["boy", "man", "girl", "woman", "grandfather", "grandmother"]
+        if v not in allowed_avatars:
+            raise ValueError(f'Avatar must be one of: {", ".join(allowed_avatars)}')
+        return v
+
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
@@ -172,6 +181,7 @@ class UserUpdate(BaseModel):
     location: Optional[str] = None
     bio: Optional[str] = None
     student_level: Optional[str] = None
+    avatar: Optional[str] = None
 
     @validator('role')
     def validate_role(cls, v):
@@ -201,6 +211,14 @@ class UserUpdate(BaseModel):
             if not re.match(r'^[a-zA-Z\s.]+$', v):
                 raise ValueError('Full name can only contain letters, spaces, and periods')
             return v.strip()
+        return v
+
+    @validator('avatar')
+    def validate_avatar(cls, v):
+        if v is not None:
+            allowed_avatars = ["boy", "man", "girl", "woman", "grandfather", "grandmother"]
+            if v not in allowed_avatars:
+                raise ValueError(f'Avatar must be one of: {", ".join(allowed_avatars)}')
         return v
 
 class EmailVerificationRequest(BaseModel):

@@ -29,6 +29,9 @@ const Hustles = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [activeTab, setActiveTab] = useState('browse'); // 'browse', 'my-hustles', 'my-applications'
   const [adminHustles, setAdminHustles] = useState([]);
+  const [myPostedHustles, setMyPostedHustles] = useState([]);
+  const [trendingSkills, setTrendingSkills] = useState([]);
+  const [editingHustle, setEditingHustle] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showApplicationForm, setShowApplicationForm] = useState(false);
@@ -42,11 +45,20 @@ const Hustles = () => {
     pay_rate: '',
     pay_type: 'hourly',
     time_commitment: '',
-    required_skills: '',
+    required_skills: [],
     difficulty_level: 'beginner',
-    location: '',
+    location: {
+      area: '',
+      city: '',
+      state: ''
+    },
     is_remote: true,
-    contact_info: '',
+    contact_info: {
+      email: '',
+      phone: '',
+      website: '',
+      linkedin: ''
+    },
     max_applicants: ''
   });
 
@@ -70,7 +82,8 @@ const Hustles = () => {
     setLoading(true);
     try {
       const requests = [
-        axios.get(`${API}/hustles/categories`)
+        axios.get(`${API}/hustles/categories`),
+        axios.get(`${API}/auth/trending-skills`)
       ];
 
       if (activeTab === 'browse') {
@@ -81,17 +94,22 @@ const Hustles = () => {
         );
       } else if (activeTab === 'my-applications') {
         requests.push(axios.get(`${API}/hustles/my-applications`));
+      } else if (activeTab === 'my-hustles') {
+        requests.push(axios.get(`${API}/hustles/my-posted`));
       }
 
       const responses = await Promise.all(requests);
       setCategories(responses[0].data);
+      setTrendingSkills(responses[1].data.trending_skills);
 
       if (activeTab === 'browse') {
-        setAiHustles(responses[1].data);
-        setUserHustles(responses[2].data);
-        setAdminHustles(responses[3].data);
+        setAiHustles(responses[2].data);
+        setUserHustles(responses[3].data);
+        setAdminHustles(responses[4].data);
       } else if (activeTab === 'my-applications') {
-        setMyApplications(responses[1].data);
+        setMyApplications(responses[2].data);
+      } else if (activeTab === 'my-hustles') {
+        setMyPostedHustles(responses[2].data);
       }
     } catch (error) {
       console.error('Error fetching hustles:', error);
@@ -106,30 +124,87 @@ const Hustles = () => {
       const submitData = {
         ...createFormData,
         pay_rate: parseFloat(createFormData.pay_rate),
-        required_skills: createFormData.required_skills.split(',').map(s => s.trim()).filter(s => s),
+        required_skills: createFormData.required_skills,
         max_applicants: createFormData.max_applicants ? parseInt(createFormData.max_applicants) : null
       };
 
       await axios.post(`${API}/hustles/create`, submitData);
       setShowCreateForm(false);
-      setCreateFormData({
-        title: '',
-        description: '',
-        category: 'tutoring',
-        pay_rate: '',
-        pay_type: 'hourly',
-        time_commitment: '',
-        required_skills: '',
-        difficulty_level: 'beginner',
-        location: '',
-        is_remote: true,
-        contact_info: '',
-        max_applicants: ''
-      });
-      fetchData();
+      resetCreateForm();
+      
+      // Refresh data if on my-hustles tab
+      if (activeTab === 'my-hustles') {
+        fetchData();
+      }
     } catch (error) {
       console.error('Error creating hustle:', error);
+      alert('Failed to create hustle. Please check all required fields.');
     }
+  };
+
+  const resetCreateForm = () => {
+    setCreateFormData({
+      title: '',
+      description: '',
+      category: 'tutoring',
+      pay_rate: '',
+      pay_type: 'hourly',
+      time_commitment: '',
+      required_skills: [],
+      difficulty_level: 'beginner',
+      location: {
+        area: '',
+        city: '',
+        state: ''
+      },
+      is_remote: true,
+      contact_info: {
+        email: '',
+        phone: '',
+        website: '',
+        linkedin: ''
+      },
+      max_applicants: ''
+    });
+  };
+
+  const handleUpdateHustle = async (hustleId, updateData) => {
+    try {
+      await axios.put(`${API}/hustles/${hustleId}`, updateData);
+      setEditingHustle(null);
+      fetchData(); // Refresh the data
+    } catch (error) {
+      console.error('Error updating hustle:', error);
+      alert('Failed to update hustle. Please try again.');
+    }
+  };
+
+  const handleDeleteHustle = async (hustleId) => {
+    if (!window.confirm('Are you sure you want to delete this hustle?')) return;
+    
+    try {
+      await axios.delete(`${API}/hustles/${hustleId}`);
+      fetchData(); // Refresh the data
+    } catch (error) {
+      console.error('Error deleting hustle:', error);
+      alert('Failed to delete hustle. Please try again.');
+    }
+  };
+
+  const addSkill = (skill) => {
+    if (!createFormData.required_skills.includes(skill)) {
+      setCreateFormData({
+        ...createFormData,
+        required_skills: [...createFormData.required_skills, skill]
+      });
+    }
+  };
+
+  const removeSkill = (skillToRemove) => {
+    setCreateFormData({
+      ...createFormData,
+      required_skills: createFormData.required_skills.filter(skill => skill !== skillToRemove)
+    });
   };
 
   const handleApplyToHustle = async (e) => {

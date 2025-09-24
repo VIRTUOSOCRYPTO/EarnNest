@@ -6,7 +6,11 @@ import {
   LightBulbIcon, 
   ArrowTrendingUpIcon,
   CalendarIcon,
-  CurrencyDollarIcon
+  CurrencyDollarIcon,
+  PencilIcon,
+  PlusIcon,
+  TrashIcon,
+  XMarkIcon
 } from '@heroicons/react/24/outline';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -39,17 +43,62 @@ const Analytics = () => {
 
   const fetchAnalytics = async () => {
     try {
-      const [insightsRes, summaryRes] = await Promise.all([
+      const [insightsRes, summaryRes, goalsRes] = await Promise.all([
         axios.get(`${API}/analytics/insights`),
-        axios.get(`${API}/transactions/summary`)
+        axios.get(`${API}/transactions/summary`),
+        axios.get(`${API}/financial-goals`)
       ]);
 
       setInsights(insightsRes.data);
       setSummary(summaryRes.data);
+      setGoals(goalsRes.data);
     } catch (error) {
       console.error('Error fetching analytics:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreateGoal = async () => {
+    try {
+      const response = await axios.post(`${API}/financial-goals`, {
+        name: goalForm.name,
+        target_amount: parseFloat(goalForm.target_amount),
+        description: goalForm.description,
+        category: goalForm.category || 'custom'
+      });
+      
+      setGoals([...goals, response.data]);
+      setGoalForm({ name: '', target_amount: '', description: '', category: 'custom' });
+    } catch (error) {
+      console.error('Error creating goal:', error);
+      alert('Failed to create goal. Please try again.');
+    }
+  };
+
+  const handleUpdateGoal = async (goalId, updateData) => {
+    try {
+      await axios.put(`${API}/financial-goals/${goalId}`, updateData);
+      
+      setGoals(goals.map(goal => 
+        goal.id === goalId ? { ...goal, ...updateData } : goal
+      ));
+      setEditingGoal(null);
+    } catch (error) {
+      console.error('Error updating goal:', error);
+      alert('Failed to update goal. Please try again.');
+    }
+  };
+
+  const handleDeleteGoal = async (goalId) => {
+    if (!window.confirm('Are you sure you want to delete this goal?')) return;
+    
+    try {
+      await axios.delete(`${API}/financial-goals/${goalId}`);
+      setGoals(goals.filter(goal => goal.id !== goalId));
+    } catch (error) {
+      console.error('Error deleting goal:', error);
+      alert('Failed to delete goal. Please try again.');
     }
   };
 
@@ -257,38 +306,229 @@ const Analytics = () => {
         </div>
       </div>
 
-      {/* Future Goals Section */}
+      {/* Financial Goals Section */}
       <div className="mt-8 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 slide-up" style={{ animationDelay: '0.6s' }}>
-        <h2 className="text-xl font-bold text-gray-900 mb-4">Financial Goals</h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="text-center p-4 bg-white rounded-lg shadow-sm">
-            <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
-              <CurrencyDollarIcon className="w-6 h-6 text-emerald-600" />
-            </div>
-            <h3 className="font-semibold text-gray-900 mb-1">Emergency Fund</h3>
-            <p className="text-sm text-gray-600 mb-2">Build 3 months of expenses</p>
-            <p className="text-lg font-bold text-emerald-600">{formatLargeCurrency((summary.expense || 0) * 3)}</p>
-          </div>
-          
-          <div className="text-center p-4 bg-white rounded-lg shadow-sm">
-            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
-              <ArrowTrendingUpIcon className="w-6 h-6 text-blue-600" />
-            </div>
-            <h3 className="font-semibold text-gray-900 mb-1">Monthly Income Goal</h3>
-            <p className="text-sm text-gray-600 mb-2">Increase by 50%</p>
-            <p className="text-lg font-bold text-blue-600">{formatLargeCurrency((summary.income || 0) * 1.5)}</p>
-          </div>
-          
-          <div className="text-center p-4 bg-white rounded-lg shadow-sm">
-            <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
-              <ChartBarIcon className="w-6 h-6 text-purple-600" />
-            </div>
-            <h3 className="font-semibold text-gray-900 mb-1">Graduation Fund</h3>
-            <p className="text-sm text-gray-600 mb-2">Save for post-graduation</p>
-            <p className="text-lg font-bold text-emerald-600">{formatLargeCurrency(500000)}</p>
-          </div>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold text-gray-900">Financial Goals</h2>
+          <button
+            onClick={() => setEditingGoal('new')}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <PlusIcon className="w-4 h-4 mr-2" />
+            Add Goal
+          </button>
         </div>
+        
+        {goals.length === 0 ? (
+          <div className="text-center py-12 bg-white rounded-lg">
+            <ChartBarIcon className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">No Financial Goals Yet</h3>
+            <p className="text-gray-600 mb-4">Start by creating your first financial goal to track your progress.</p>
+            <button
+              onClick={() => setEditingGoal('new')}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Create Your First Goal
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {goals.map((goal) => (
+              <div key={goal.id} className="relative p-4 bg-white rounded-lg shadow-sm group">
+                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex space-x-1">
+                    <button
+                      onClick={() => setEditingGoal(goal)}
+                      className="p-1 text-gray-400 hover:text-blue-600 rounded"
+                    >
+                      <PencilIcon className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteGoal(goal.id)}
+                      className="p-1 text-gray-400 hover:text-red-600 rounded"
+                    >
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 ${
+                  goal.category === 'emergency_fund' ? 'bg-emerald-100' :
+                  goal.category === 'monthly_income' ? 'bg-blue-100' :
+                  goal.category === 'graduation' ? 'bg-purple-100' :
+                  'bg-gray-100'
+                }`}>
+                  {goal.category === 'emergency_fund' ? (
+                    <CurrencyDollarIcon className="w-6 h-6 text-emerald-600" />
+                  ) : goal.category === 'monthly_income' ? (
+                    <ArrowTrendingUpIcon className="w-6 h-6 text-blue-600" />
+                  ) : goal.category === 'graduation' ? (
+                    <ChartBarIcon className="w-6 h-6 text-purple-600" />
+                  ) : (
+                    <ChartBarIcon className="w-6 h-6 text-gray-600" />
+                  )}
+                </div>
+                
+                <h3 className="font-semibold text-gray-900 mb-1 text-center">{goal.name}</h3>
+                <p className="text-sm text-gray-600 mb-2 text-center">{goal.description}</p>
+                
+                {/* Progress Bar */}
+                <div className="mb-2">
+                  <div className="flex justify-between text-xs text-gray-600 mb-1">
+                    <span>₹{formatCurrency(goal.current_amount)}</span>
+                    <span>₹{formatCurrency(goal.target_amount)}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className={`h-2 rounded-full ${
+                        goal.category === 'emergency_fund' ? 'bg-emerald-600' :
+                        goal.category === 'monthly_income' ? 'bg-blue-600' :
+                        goal.category === 'graduation' ? 'bg-purple-600' :
+                        'bg-gray-600'
+                      }`}
+                      style={{ width: `${Math.min((goal.current_amount / goal.target_amount) * 100, 100)}%` }}
+                    ></div>
+                  </div>
+                </div>
+                
+                <p className={`text-center font-bold ${
+                  goal.category === 'emergency_fund' ? 'text-emerald-600' :
+                  goal.category === 'monthly_income' ? 'text-blue-600' :
+                  goal.category === 'graduation' ? 'text-purple-600' :
+                  'text-gray-600'
+                }`}>
+                  {Math.round((goal.current_amount / goal.target_amount) * 100)}% Complete
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Goal Creation/Editing Modal */}
+        {editingGoal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">
+                  {editingGoal === 'new' ? 'Create New Goal' : 'Edit Goal'}
+                </h3>
+                <button
+                  onClick={() => {
+                    setEditingGoal(null);
+                    setGoalForm({ name: '', target_amount: '', description: '', category: 'custom' });
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <XMarkIcon className="w-6 h-6" />
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Goal Name</label>
+                  <input
+                    type="text"
+                    value={editingGoal === 'new' ? goalForm.name : editingGoal.name}
+                    onChange={(e) => {
+                      if (editingGoal === 'new') {
+                        setGoalForm({ ...goalForm, name: e.target.value });
+                      } else {
+                        setEditingGoal({ ...editingGoal, name: e.target.value });
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., Emergency Fund"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Target Amount (₹)</label>
+                  <input
+                    type="number"
+                    value={editingGoal === 'new' ? goalForm.target_amount : editingGoal.target_amount}
+                    onChange={(e) => {
+                      if (editingGoal === 'new') {
+                        setGoalForm({ ...goalForm, target_amount: e.target.value });
+                      } else {
+                        setEditingGoal({ ...editingGoal, target_amount: parseFloat(e.target.value) });
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="50000"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                  <textarea
+                    value={editingGoal === 'new' ? goalForm.description : editingGoal.description}
+                    onChange={(e) => {
+                      if (editingGoal === 'new') {
+                        setGoalForm({ ...goalForm, description: e.target.value });
+                      } else {
+                        setEditingGoal({ ...editingGoal, description: e.target.value });
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Describe your goal..."
+                    rows="3"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                  <select
+                    value={editingGoal === 'new' ? goalForm.category : editingGoal.category}
+                    onChange={(e) => {
+                      if (editingGoal === 'new') {
+                        setGoalForm({ ...goalForm, category: e.target.value });
+                      } else {
+                        setEditingGoal({ ...editingGoal, category: e.target.value });
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="emergency_fund">Emergency Fund</option>
+                    <option value="monthly_income">Monthly Income Goal</option>
+                    <option value="graduation">Graduation Fund</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div className="flex space-x-3 mt-6">
+                <button
+                  onClick={() => {
+                    setEditingGoal(null);
+                    setGoalForm({ name: '', target_amount: '', description: '', category: 'custom' });
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (editingGoal === 'new') {
+                      if (goalForm.name && goalForm.target_amount) {
+                        handleCreateGoal();
+                      }
+                    } else {
+                      handleUpdateGoal(editingGoal.id, {
+                        name: editingGoal.name,
+                        target_amount: editingGoal.target_amount,
+                        description: editingGoal.description,
+                        category: editingGoal.category
+                      });
+                    }
+                  }}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  {editingGoal === 'new' ? 'Create Goal' : 'Update Goal'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

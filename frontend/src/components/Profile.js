@@ -1,14 +1,14 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth, formatCurrency } from '../App';
 import { 
-  CameraIcon,
   PencilIcon,
   MapPinIcon,
   ClockIcon,
   AcademicCapIcon,
   UserIcon,
-  StarIcon
+  StarIcon,
+  CheckCircleIcon
 } from '@heroicons/react/24/outline';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -18,17 +18,29 @@ const Profile = () => {
   const { user, updateUser } = useAuth();
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [photoLoading, setPhotoLoading] = useState(false);
+  const [avatars, setAvatars] = useState([]);
   const [formData, setFormData] = useState({
     full_name: user?.full_name || '',
     skills: user?.skills?.join(', ') || '',
     availability_hours: user?.availability_hours || 10,
     location: user?.location || '',
     bio: user?.bio || '',
-    student_level: user?.student_level || 'undergraduate'
+    student_level: user?.student_level || 'undergraduate',
+    avatar: user?.avatar || 'boy'
   });
-  
-  const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    fetchAvatars();
+  }, []);
+
+  const fetchAvatars = async () => {
+    try {
+      const response = await axios.get(`${API}/auth/avatars`);
+      setAvatars(response.data.avatars);
+    } catch (error) {
+      console.error('Error fetching avatars:', error);
+    }
+  };
 
   const handleChange = (e) => {
     setFormData({
@@ -62,39 +74,16 @@ const Profile = () => {
     }
   };
 
-  const handlePhotoUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    setPhotoLoading(true);
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      const response = await axios.post(`${API}/user/profile/photo`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-
-      console.log('Photo upload response:', response.data);
-
-      // Immediately update user with new photo URL from response
-      if (response.data.photo_url) {
-        const updatedUser = { ...user, profile_photo: response.data.photo_url };
-        updateUser(updatedUser);
-      }
-
-      // Also fetch fresh user data to ensure consistency
-      const userResponse = await axios.get(`${API}/user/profile`);
-      updateUser(userResponse.data);
-      
-    } catch (error) {
-      console.error('Error uploading photo:', error);
-      alert('Error uploading photo. Please try again.');
-    } finally {
-      setPhotoLoading(false);
-    }
+  const getAvatarImage = (avatarType) => {
+    const avatarMap = {
+      boy: 'https://images.unsplash.com/photo-1606209331994-fcf81b3f5e23?w=100&h=100&fit=crop&crop=face',
+      man: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face',
+      girl: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=100&h=100&fit=crop&crop=face',
+      woman: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop&crop=face',
+      grandfather: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face',
+      grandmother: 'https://images.unsplash.com/photo-1594736797933-d0651ba42e6d?w=100&h=100&fit=crop&crop=face'
+    };
+    return avatarMap[avatarType] || avatarMap.boy;
   };
 
   const getStudentLevelDisplay = (level) => {
@@ -119,55 +108,21 @@ const Profile = () => {
         <div className="lg:col-span-1">
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 slide-up">
             <div className="text-center">
-              {/* Profile Photo */}
+              {/* Profile Avatar */}
               <div className="relative inline-block mb-4">
                 <div className="w-32 h-32 rounded-full overflow-hidden bg-gray-100 border-4 border-white shadow-lg">
-                  {user?.profile_photo ? (
-                    <img
-                      src={`${BACKEND_URL}${user.profile_photo}`}
-                      alt="Profile"
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        console.error('Error loading profile image:', e.target.src);
-                        e.target.style.display = 'none';
-                      }}
-                      onLoad={() => {
-                        console.log('Profile image loaded successfully:', `${BACKEND_URL}${user.profile_photo}`);
-                      }}
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-emerald-400 to-green-500">
-                      <UserIcon className="w-16 h-16 text-white" />
-                    </div>
-                  )}
-                  {user?.profile_photo && (
-                    <div className="absolute inset-0 w-32 h-32 rounded-full overflow-hidden bg-gray-100 border-4 border-white shadow-lg" style={{ display: 'none' }}>
-                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-emerald-400 to-green-500">
-                        <UserIcon className="w-16 h-16 text-white" />
-                      </div>
-                    </div>
-                  )}
+                  <img
+                    src={getAvatarImage(user?.avatar || 'boy')}
+                    alt="Profile Avatar"
+                    className="w-full h-full object-cover"
+                  />
                 </div>
                 
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={photoLoading}
-                  className="absolute bottom-0 right-0 bg-emerald-600 hover:bg-emerald-700 text-white p-2 rounded-full shadow-lg transition-colors"
-                >
-                  {photoLoading ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  ) : (
-                    <CameraIcon className="w-5 h-5" />
-                  )}
-                </button>
-                
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handlePhotoUpload}
-                  className="hidden"
-                />
+                {editing && (
+                  <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2">
+                    <CheckCircleIcon className="w-6 h-6 text-emerald-600 bg-white rounded-full" />
+                  </div>
+                )}
               </div>
 
               <h2 className="text-xl font-bold text-gray-900 mb-2">{user?.full_name}</h2>
@@ -254,6 +209,38 @@ const Profile = () => {
                       <option value="undergraduate">Undergraduate</option>
                       <option value="graduate">Graduate</option>
                     </select>
+                  </div>
+                </div>
+
+                {/* Avatar Selection */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">
+                    Avatar Selection
+                  </label>
+                  <div className="grid grid-cols-3 gap-3">
+                    {['boy', 'man', 'girl', 'woman', 'grandfather', 'grandmother'].map((avatarType) => (
+                      <div
+                        key={avatarType}
+                        onClick={() => setFormData({...formData, avatar: avatarType})}
+                        className={`cursor-pointer rounded-lg border-2 p-3 text-center transition-all ${
+                          formData.avatar === avatarType
+                            ? 'border-emerald-500 bg-emerald-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <img
+                          src={getAvatarImage(avatarType)}
+                          alt={avatarType}
+                          className="w-12 h-12 rounded-full mx-auto mb-2 object-cover"
+                        />
+                        <span className="text-xs font-medium text-gray-700 capitalize">
+                          {avatarType === 'grandfather' ? 'Grandpa' : avatarType === 'grandmother' ? 'Grandma' : avatarType}
+                        </span>
+                        {formData.avatar === avatarType && (
+                          <CheckCircleIcon className="w-4 h-4 text-emerald-600 mx-auto mt-1" />
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
 

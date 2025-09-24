@@ -16,7 +16,9 @@ import {
   UserIcon,
   MapPinIcon,
   CalendarIcon,
-  CheckCircleIcon
+  CheckCircleIcon,
+  PencilIcon,
+  TrashIcon
 } from '@heroicons/react/24/outline';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -45,20 +47,11 @@ const Hustles = () => {
     pay_rate: '',
     pay_type: 'hourly',
     time_commitment: '',
-    required_skills: [],
+    required_skills: '', // Changed to string for comma-separated input
     difficulty_level: 'beginner',
-    location: {
-      area: '',
-      city: '',
-      state: ''
-    },
+    location: '', // Changed to string for simple location input
     is_remote: true,
-    contact_info: {
-      email: '',
-      phone: '',
-      website: '',
-      linkedin: ''
-    },
+    contact_info: '', // Changed to string for simple contact input
     max_applicants: ''
   });
 
@@ -121,12 +114,45 @@ const Hustles = () => {
   const handleCreateHustle = async (e) => {
     e.preventDefault();
     try {
+      // Parse required_skills from comma-separated string to array
+      const skillsArray = createFormData.required_skills
+        ? createFormData.required_skills.split(',').map(skill => skill.trim()).filter(skill => skill)
+        : [];
+
+      // Structure contact info as object
+      const contactInfo = {};
+      if (createFormData.contact_info) {
+        // Simple parsing - could be email, phone, or website
+        const contactValue = createFormData.contact_info.trim();
+        if (contactValue.includes('@')) {
+          contactInfo.email = contactValue;
+        } else if (contactValue.startsWith('http')) {
+          contactInfo.website = contactValue;
+        } else {
+          contactInfo.phone = contactValue;
+        }
+      }
+
       const submitData = {
-        ...createFormData,
+        title: createFormData.title,
+        description: createFormData.description,
+        category: createFormData.category,
         pay_rate: parseFloat(createFormData.pay_rate),
-        required_skills: createFormData.required_skills,
+        pay_type: createFormData.pay_type,
+        time_commitment: createFormData.time_commitment,
+        required_skills: skillsArray,
+        difficulty_level: createFormData.difficulty_level,
+        location: createFormData.location && createFormData.location.trim() ? {
+          area: createFormData.location,
+          city: createFormData.location,
+          state: createFormData.location
+        } : null,
+        is_remote: createFormData.is_remote,
+        contact_info: contactInfo,
         max_applicants: createFormData.max_applicants ? parseInt(createFormData.max_applicants) : null
       };
+
+      console.log('Submitting hustle data:', submitData);
 
       await axios.post(`${API}/hustles/create`, submitData);
       setShowCreateForm(false);
@@ -136,9 +162,12 @@ const Hustles = () => {
       if (activeTab === 'my-hustles') {
         fetchData();
       }
+      
+      alert('Side hustle posted successfully!');
     } catch (error) {
       console.error('Error creating hustle:', error);
-      alert('Failed to create hustle. Please check all required fields.');
+      const errorMessage = error.response?.data?.detail || 'Failed to create hustle. Please check all required fields.';
+      alert(errorMessage);
     }
   };
 
@@ -150,20 +179,11 @@ const Hustles = () => {
       pay_rate: '',
       pay_type: 'hourly',
       time_commitment: '',
-      required_skills: [],
+      required_skills: '', // Changed to string
       difficulty_level: 'beginner',
-      location: {
-        area: '',
-        city: '',
-        state: ''
-      },
+      location: '', // Changed to string
       is_remote: true,
-      contact_info: {
-        email: '',
-        phone: '',
-        website: '',
-        linkedin: ''
-      },
+      contact_info: '', // Changed to string
       max_applicants: ''
     });
   };
@@ -344,6 +364,16 @@ const Hustles = () => {
             }`}
           >
             Browse Opportunities
+          </button>
+          <button
+            onClick={() => setActiveTab('my-hustles')}
+            className={`px-6 py-3 font-semibold rounded-t-lg transition-colors ${
+              activeTab === 'my-hustles'
+                ? 'bg-emerald-100 text-emerald-700 border-b-2 border-emerald-500'
+                : 'text-gray-600 hover:text-emerald-600'
+            }`}
+          >
+            My Posted Hustles
           </button>
           <button
             onClick={() => setActiveTab('my-applications')}
@@ -734,6 +764,103 @@ const Hustles = () => {
                 className="btn-primary"
               >
                 Browse Opportunities
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* My Posted Hustles Tab Content */}
+      {activeTab === 'my-hustles' && (
+        <div className="space-y-4">
+          {myPostedHustles.length > 0 ? (
+            myPostedHustles.map((hustle, index) => (
+              <div key={hustle.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 slide-up" style={{ animationDelay: `${index * 0.1}s` }}>
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="text-lg font-bold text-gray-900">{hustle.title}</h3>
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${getDifficultyColor(hustle.difficulty_level)}`}>
+                        {hustle.difficulty_level}
+                      </span>
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                        hustle.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                      }`}>
+                        {hustle.status}
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center gap-4 text-sm text-gray-500 mb-3">
+                      <div className="flex items-center gap-1">
+                        <BriefcaseIcon className="w-4 h-4" />
+                        {categories.find(c => c.name === hustle.category)?.display || hustle.category}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <CurrencyDollarIcon className="w-4 h-4 text-emerald-500" />
+                        <span>{formatCurrency(hustle.pay_rate)}/{hustle.pay_type}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <ClockIcon className="w-4 h-4" />
+                        {hustle.time_commitment}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <UserIcon className="w-4 h-4" />
+                        {hustle.applicants?.length || 0} applicants
+                      </div>
+                    </div>
+
+                    <p className="text-sm text-gray-600 mb-3 line-clamp-2">{hustle.description}</p>
+
+                    <div className="flex flex-wrap gap-1">
+                      {(hustle.required_skills || []).slice(0, 3).map((skill, idx) => (
+                        <span
+                          key={idx}
+                          className="text-xs bg-emerald-100 text-emerald-600 px-2 py-1 rounded-full"
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-2 ml-4">
+                    <button
+                      onClick={() => handleUpdateHustle(hustle.id, {status: hustle.status === 'active' ? 'closed' : 'active'})}
+                      className={`px-3 py-1 rounded text-sm font-medium ${
+                        hustle.status === 'active' 
+                          ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+                          : 'bg-green-100 text-green-700 hover:bg-green-200'
+                      }`}
+                    >
+                      {hustle.status === 'active' ? 'Close' : 'Activate'}
+                    </button>
+                    <button
+                      onClick={() => setEditingHustle(hustle)}
+                      className="p-2 text-gray-400 hover:text-blue-600"
+                    >
+                      <PencilIcon className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteHustle(hustle.id)}
+                      className="p-2 text-gray-400 hover:text-red-600"
+                    >
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="text-center py-12">
+              <BriefcaseIcon className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+              <h3 className="text-xl font-semibold text-gray-500 mb-2">No hustles posted yet</h3>
+              <p className="text-gray-400 mb-6">Start by posting your first side hustle to attract opportunities</p>
+              <button
+                onClick={() => setShowCreateForm(true)}
+                className="btn-primary flex items-center gap-2 mx-auto"
+              >
+                <PlusIcon className="w-5 h-5" />
+                Post Your First Hustle
               </button>
             </div>
           )}

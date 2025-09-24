@@ -364,7 +364,7 @@ class UserHustle(BaseModel):
             raise ValueError('Pay rate cannot exceed ₹1,00,000')
         return round(v, 2)
 
-    @root_validator
+    @root_validator(skip_on_failure=True)
     def validate_contact_info(cls, values):
         contact_info = values.get('contact_info')
         if isinstance(contact_info, dict):

@@ -242,6 +242,7 @@ async def delete_password_reset_code(email: str):
 async def create_financial_goal(goal_data: dict):
     """Create financial goal"""
     goal_data["created_at"] = datetime.now(timezone.utc)
+    goal_data["is_active"] = True  # Ensure goals are marked as active
     return await db.financial_goals.insert_one(goal_data)
 
 async def get_user_financial_goals(user_id: str):

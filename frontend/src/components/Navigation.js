@@ -8,7 +8,8 @@ import {
   BriefcaseIcon, 
   ChartBarIcon, 
   ArrowRightOnRectangleIcon,
-  UserCircleIcon
+  UserCircleIcon,
+  StarIcon
 } from '@heroicons/react/24/outline';
 import { formatCurrency } from '../App';
 
@@ -21,6 +22,7 @@ const Navigation = () => {
     { path: '/dashboard', label: 'Dashboard', icon: HomeIcon },
     { path: '/transactions', label: 'Transactions', icon: CreditCardIcon },
     { path: '/budget', label: 'Budget', icon: BanknotesIcon },
+    { path: '/goals', label: 'Goals', icon: StarIcon },
     { path: '/hustles', label: 'Side Hustles', icon: BriefcaseIcon },
     { path: '/analytics', label: 'Analytics', icon: ChartBarIcon },
   ];

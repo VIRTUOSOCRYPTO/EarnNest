@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, EmailStr, validator
+from pydantic import BaseModel, Field, EmailStr, validator, root_validator
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 import uuid
@@ -29,8 +29,9 @@ class User(BaseModel):
     profile_photo: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     total_earnings: float = 0.0
+    net_savings: float = 0.0
     current_streak: int = 0
-    achievements: List[str] = []
+    achievements: List[Dict[str, Any]] = []
     email_verified: bool = False
     is_active: bool = True
     is_admin: bool = False
@@ -285,6 +286,55 @@ class TransactionCreate(BaseModel):
             raise ValueError('Amount cannot exceed ₹1,00,00,000')
         return round(v, 2)
 
+class ContactInfo(BaseModel):
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    website: Optional[str] = None
+    linkedin: Optional[str] = None
+    
+    @validator('email')
+    def validate_email(cls, v):
+        if v:
+            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            if not re.match(email_pattern, v):
+                raise ValueError('Invalid email format')
+        return v
+    
+    @validator('phone')
+    def validate_phone(cls, v):
+        if v:
+            phone_pattern = r'^[\+]?[1-9][\d]{3,14}$'
+            if not re.match(phone_pattern, v):
+                raise ValueError('Invalid phone number format')
+        return v
+    
+    @validator('website')
+    def validate_website(cls, v):
+        if v:
+            url_pattern = r'^https?://[^\s]+$'
+            if not re.match(url_pattern, v):
+                raise ValueError('Invalid website URL format')
+        return v
+    
+    @validator('linkedin')
+    def validate_linkedin(cls, v):
+        if v:
+            linkedin_pattern = r'^https?://[^\s]*linkedin\.com[^\s]*$'
+            if not re.match(linkedin_pattern, v):
+                raise ValueError('Invalid LinkedIn URL format')
+        return v
+
+class LocationInfo(BaseModel):
+    area: str
+    city: str
+    state: str
+    
+    @validator('area', 'city', 'state')
+    def validate_location_fields(cls, v):
+        if not v or len(v.strip()) < 2:
+            raise ValueError('All location fields must be at least 2 characters long')
+        return v.strip()
+
 class UserHustle(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     created_by: str  # user_id
@@ -296,9 +346,9 @@ class UserHustle(BaseModel):
     time_commitment: str
     required_skills: List[str]
     difficulty_level: str  # "beginner", "intermediate", "advanced"
-    location: Optional[str] = None
+    location: Optional[LocationInfo] = None
     is_remote: bool = True
-    contact_info: str
+    contact_info: ContactInfo
     application_deadline: Optional[datetime] = None
     max_applicants: Optional[int] = None
     status: str = "active"  # "active", "closed", "completed"
@@ -314,16 +364,16 @@ class UserHustle(BaseModel):
             raise ValueError('Pay rate cannot exceed ₹1,00,000')
         return round(v, 2)
 
-    @validator('contact_info')
-    def validate_contact_info(cls, v):
-        # Check if it's an email, phone, or website
-        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-        phone_pattern = r'^[\+]?[1-9][\d]{3,14}$'
-        url_pattern = r'^https?://[^\s]+$'
+    @root_validator
+    def validate_contact_info(cls, values):
+        contact_info = values.get('contact_info')
+        if isinstance(contact_info, dict):
+            contact_info = ContactInfo(**contact_info)
         
-        if not (re.match(email_pattern, v) or re.match(phone_pattern, v) or re.match(url_pattern, v)):
-            raise ValueError('Contact info must be a valid email, phone number, or website URL')
-        return v
+        # At least one contact method must be provided
+        if not any([contact_info.email, contact_info.phone, contact_info.website, contact_info.linkedin]):
+            raise ValueError('At least one contact method must be provided')
+        return values
 
 class UserHustleCreate(BaseModel):
     title: str
@@ -334,9 +384,9 @@ class UserHustleCreate(BaseModel):
     time_commitment: str
     required_skills: List[str]
     difficulty_level: str
-    location: Optional[str] = None
+    location: Optional[LocationInfo] = None
     is_remote: bool = True
-    contact_info: str
+    contact_info: ContactInfo
     application_deadline: Optional[datetime] = None
     max_applicants: Optional[int] = None
 
@@ -355,6 +405,38 @@ class UserHustleCreate(BaseModel):
         if len(v) > 1000:
             raise ValueError('Description cannot exceed 1000 characters')
         return v.strip()
+
+class UserHustleUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    pay_rate: Optional[float] = None
+    pay_type: Optional[str] = None
+    time_commitment: Optional[str] = None
+    required_skills: Optional[List[str]] = None
+    difficulty_level: Optional[str] = None
+    location: Optional[LocationInfo] = None
+    is_remote: Optional[bool] = None
+    contact_info: Optional[ContactInfo] = None
+    application_deadline: Optional[datetime] = None
+    max_applicants: Optional[int] = None
+    status: Optional[str] = None
+
+    @validator('title')
+    def validate_title(cls, v):
+        if v and len(v.strip()) < 5:
+            raise ValueError('Title must be at least 5 characters long')
+        if v and len(v) > 100:
+            raise ValueError('Title cannot exceed 100 characters')
+        return v.strip() if v else v
+
+    @validator('description')
+    def validate_description(cls, v):
+        if v and len(v.strip()) < 20:
+            raise ValueError('Description must be at least 20 characters long')
+        if v and len(v) > 1000:
+            raise ValueError('Description cannot exceed 1000 characters')
+        return v.strip() if v else v
 
 class HustleApplication(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))

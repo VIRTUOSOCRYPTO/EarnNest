@@ -104,13 +104,21 @@ const FinancialGoals = () => {
   };
 
   const handleDelete = async (goalId) => {
-    if (!confirm('Are you sure you want to delete this goal?')) return;
-
     try {
-      await axios.delete(`${API}/financial-goals/${goalId}`);
+      // Use window.confirm to ensure compatibility
+      const confirmDelete = window.confirm('Are you sure you want to delete this goal?');
+      if (!confirmDelete) return;
+
+      console.log('Deleting goal with ID:', goalId);
+      const response = await axios.delete(`${API}/financial-goals/${goalId}`);
+      console.log('Delete response:', response);
+      
       await loadGoals();
+      setError(''); // Clear any previous errors
     } catch (error) {
-      setError('Failed to delete goal');
+      console.error('Delete error:', error);
+      const errorMessage = error.response?.data?.detail || 'Failed to delete goal';
+      setError(errorMessage);
     }
   };
 

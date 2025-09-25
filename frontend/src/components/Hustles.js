@@ -222,12 +222,21 @@ const Hustles = () => {
 
   const handleUpdateHustle = async (hustleId, updateData) => {
     try {
-      await axios.put(`${API}/hustles/${hustleId}`, updateData);
+      console.log('Updating hustle:', hustleId);
+      console.log('Update data:', updateData);
+      console.log('Current axios headers:', axios.defaults.headers.common);
+      
+      const response = await axios.put(`${API}/hustles/${hustleId}`, updateData);
+      console.log('Update response:', response.data);
+      
       setEditingHustle(null);
       fetchData(); // Refresh the data
+      alert('Hustle updated successfully!');
     } catch (error) {
       console.error('Error updating hustle:', error);
-      alert('Failed to update hustle. Please try again.');
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      alert(`Failed to update hustle: ${error.response?.data?.detail || error.message}`);
     }
   };
 

@@ -236,20 +236,50 @@ const Hustles = () => {
       console.error('Error updating hustle:', error);
       console.error('Error response:', error.response?.data);
       console.error('Error status:', error.response?.status);
+      console.error('Full error object:', JSON.stringify(error, null, 2));
       
       let errorMessage = 'Please try again.';
       if (error.response?.data) {
+        console.log('Error response data type:', typeof error.response.data);
+        console.log('Error response data:', error.response.data);
+        
         if (typeof error.response.data === 'string') {
           errorMessage = error.response.data;
+        } else if (Array.isArray(error.response.data)) {
+          // Handle Pydantic validation errors
+          const validationErrors = error.response.data.map(err => {
+            const field = err.loc ? err.loc.join('.') : 'field';
+            return `${field}: ${err.msg}`;
+          }).join('\n');
+          errorMessage = `Validation errors:\n${validationErrors}`;
         } else if (error.response.data.detail) {
-          errorMessage = error.response.data.detail;
+          if (typeof error.response.data.detail === 'string') {
+            errorMessage = error.response.data.detail;
+          } else if (Array.isArray(error.response.data.detail)) {
+            // Handle nested validation errors in detail
+            const validationErrors = error.response.data.detail.map(err => {
+              const field = err.loc ? err.loc.join('.') : 'field';
+              return `${field}: ${err.msg}`;
+            }).join('\n');
+            errorMessage = `Validation errors:\n${validationErrors}`;
+          } else {
+            errorMessage = JSON.stringify(error.response.data.detail);
+          }
         } else if (error.response.data.message) {
-          errorMessage = error.response.data.message;
+          if (typeof error.response.data.message === 'string') {
+            errorMessage = error.response.data.message;
+          } else {
+            errorMessage = JSON.stringify(error.response.data.message);
+          }
+        } else {
+          // If it's an object but doesn't have detail/message, stringify it
+          errorMessage = JSON.stringify(error.response.data);
         }
       } else if (error.message) {
         errorMessage = error.message;
       }
       
+      console.log('Final error message:', errorMessage);
       alert(`Failed to update hustle: ${errorMessage}`);
     }
   };
@@ -937,7 +967,11 @@ const Hustles = () => {
                       {hustle.status === 'active' ? 'Close' : 'Open'}
                     </button>
                     <button
-                      onClick={() => setEditingHustle(hustle)}
+                      onClick={() => setEditingHustle({
+                        ...hustle,
+                        payment_amount: hustle.pay_rate,
+                        payment_type: hustle.pay_type
+                      })}
                       className="p-1.5 text-gray-400 hover:text-blue-600 rounded-md hover:bg-blue-50"
                       title="Edit Hustle"
                     >
@@ -1234,12 +1268,20 @@ const Hustles = () => {
                 title: editingHustle.title,
                 description: editingHustle.description,
                 category: editingHustle.category,
-                payment_type: editingHustle.payment_type,
-                payment_amount: editingHustle.payment_amount,
+                pay_type: editingHustle.payment_type,
+                pay_rate: editingHustle.payment_amount,
                 time_commitment: editingHustle.time_commitment,
-                required_skills: Array.isArray(editingHustle.required_skills) 
-                  ? editingHustle.required_skills.join(', ') 
-                  : editingHustle.required_skills,
+                required_skills: (() => {
+                  if (Array.isArray(editingHustle.required_skills)) {
+                    return editingHustle.required_skills;
+                  } else if (typeof editingHustle.required_skills === 'string') {
+                    return editingHustle.required_skills
+                      ? editingHustle.required_skills.split(',').map(skill => skill.trim()).filter(skill => skill)
+                      : [];
+                  } else {
+                    return [];
+                  }
+                })(),
                 difficulty_level: editingHustle.difficulty_level,
                 location: (() => {
                   if (!editingHustle.location) return '';

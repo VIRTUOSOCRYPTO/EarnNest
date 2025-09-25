@@ -142,11 +142,8 @@ const Hustles = () => {
         time_commitment: createFormData.time_commitment,
         required_skills: skillsArray,
         difficulty_level: createFormData.difficulty_level,
-        location: createFormData.location && createFormData.location.trim() ? {
-          area: createFormData.location,
-          city: createFormData.location,
-          state: createFormData.location
-        } : null,
+        location: createFormData.location && createFormData.location.trim() ? 
+          createFormData.location.trim() : null,
         is_remote: createFormData.is_remote,
         contact_info: contactInfo,
         max_applicants: createFormData.max_applicants ? parseInt(createFormData.max_applicants) : null
@@ -176,12 +173,29 @@ const Hustles = () => {
       if (error.response?.status === 401) {
         errorMessage = 'Authentication failed. Please login again.';
       } else if (error.response?.status === 422) {
-        errorMessage = `Validation error: ${error.response.data?.detail || 'Invalid data provided'}`;
+        // Handle validation errors better
+        if (error.response.data?.detail && Array.isArray(error.response.data.detail)) {
+          errorMessage = error.response.data.detail.map(err => {
+            if (typeof err === 'object' && err.msg) {
+              return `${err.loc ? err.loc.join('.') + ': ' : ''}${err.msg}`;
+            }
+            return String(err);
+          }).join('\n');
+        } else if (error.response.data?.detail) {
+          errorMessage = String(error.response.data.detail);
+        } else {
+          errorMessage = 'Validation failed. Please check your input.';
+        }
       } else if (error.response?.data?.detail) {
         if (Array.isArray(error.response.data.detail)) {
-          errorMessage = error.response.data.detail.map(e => e.msg).join(', ');
+          errorMessage = error.response.data.detail.map(e => {
+            if (typeof e === 'object') {
+              return e.msg || JSON.stringify(e);
+            }
+            return String(e);
+          }).join(', ');
         } else {
-          errorMessage = error.response.data.detail;
+          errorMessage = String(error.response.data.detail);
         }
       }
       
@@ -248,18 +262,30 @@ const Hustles = () => {
   };
 
   const addSkill = (skill) => {
-    if (!createFormData.required_skills.includes(skill)) {
+    // Convert to array if it's a string, then add skill
+    const currentSkills = typeof createFormData.required_skills === 'string' 
+      ? createFormData.required_skills.split(',').map(s => s.trim()).filter(s => s)
+      : createFormData.required_skills || [];
+    
+    if (!currentSkills.includes(skill)) {
+      const newSkills = [...currentSkills, skill];
       setCreateFormData({
         ...createFormData,
-        required_skills: [...createFormData.required_skills, skill]
+        required_skills: newSkills.join(', ')
       });
     }
   };
 
   const removeSkill = (skillToRemove) => {
+    // Convert to array if it's a string, then remove skill
+    const currentSkills = typeof createFormData.required_skills === 'string' 
+      ? createFormData.required_skills.split(',').map(s => s.trim()).filter(s => s)
+      : createFormData.required_skills || [];
+    
+    const newSkills = currentSkills.filter(skill => skill !== skillToRemove);
     setCreateFormData({
       ...createFormData,
-      required_skills: createFormData.required_skills.filter(skill => skill !== skillToRemove)
+      required_skills: newSkills.join(', ')
     });
   };
 
@@ -409,59 +435,60 @@ const Hustles = () => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Header */}
-      <div className="mb-8 fade-in">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Side Hustle Hub</h1>
-        <p className="text-gray-600">Discover opportunities, create your own, and track applications</p>
-      </div>
-
-      {/* Tabs */}
-      <div className="mb-8 slide-up">
-        <div className="flex flex-wrap gap-2 border-b border-gray-200">
-          <button
-            onClick={() => setActiveTab('browse')}
-            className={`px-6 py-3 font-semibold rounded-t-lg transition-colors ${
-              activeTab === 'browse'
-                ? 'bg-emerald-100 text-emerald-700 border-b-2 border-emerald-500'
-                : 'text-gray-600 hover:text-emerald-600'
-            }`}
-          >
-            Browse Opportunities
-          </button>
-          <button
-            onClick={() => setActiveTab('my-hustles')}
-            className={`px-6 py-3 font-semibold rounded-t-lg transition-colors ${
-              activeTab === 'my-hustles'
-                ? 'bg-emerald-100 text-emerald-700 border-b-2 border-emerald-500'
-                : 'text-gray-600 hover:text-emerald-600'
-            }`}
-          >
-            My Posted Hustles
-          </button>
-          <button
-            onClick={() => setActiveTab('my-applications')}
-            className={`px-6 py-3 font-semibold rounded-t-lg transition-colors ${
-              activeTab === 'my-applications'
-                ? 'bg-emerald-100 text-emerald-700 border-b-2 border-emerald-500'
-                : 'text-gray-600 hover:text-emerald-600'
-            }`}
-          >
-            My Applications
-          </button>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+        {/* Header */}
+        <div className="mb-6 sm:mb-8 fade-in">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Side Hustle Hub</h1>
+          <p className="text-gray-600 text-sm sm:text-base">Discover opportunities, create your own, and track applications</p>
         </div>
-      </div>
+
+        {/* Tabs */}
+        <div className="mb-6 sm:mb-8 slide-up">
+          <div className="flex flex-wrap gap-1 sm:gap-2 border-b border-gray-200 overflow-x-auto">
+            <button
+              onClick={() => setActiveTab('browse')}
+              className={`px-3 sm:px-6 py-2 sm:py-3 font-semibold rounded-t-lg transition-colors text-sm sm:text-base whitespace-nowrap ${
+                activeTab === 'browse'
+                  ? 'bg-emerald-100 text-emerald-700 border-b-2 border-emerald-500'
+                  : 'text-gray-600 hover:text-emerald-600'
+              }`}
+            >
+              Browse
+            </button>
+            <button
+              onClick={() => setActiveTab('my-hustles')}
+              className={`px-3 sm:px-6 py-2 sm:py-3 font-semibold rounded-t-lg transition-colors text-sm sm:text-base whitespace-nowrap ${
+                activeTab === 'my-hustles'
+                  ? 'bg-emerald-100 text-emerald-700 border-b-2 border-emerald-500'
+                  : 'text-gray-600 hover:text-emerald-600'
+              }`}
+            >
+              My Hustles
+            </button>
+            <button
+              onClick={() => setActiveTab('my-applications')}
+              className={`px-3 sm:px-6 py-2 sm:py-3 font-semibold rounded-t-lg transition-colors text-sm sm:text-base whitespace-nowrap ${
+                activeTab === 'my-applications'
+                  ? 'bg-emerald-100 text-emerald-700 border-b-2 border-emerald-500'
+                  : 'text-gray-600 hover:text-emerald-600'
+              }`}
+            >
+              Applications
+            </button>
+          </div>
+        </div>
 
       {/* Browse Tab Content */}
       {activeTab === 'browse' && (
         <>
           {/* Action Bar */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 slide-up">
+          <div className="flex flex-col gap-4 mb-6 sm:mb-8 slide-up">
             {/* Category Filter */}
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap gap-2 sm:gap-3">
               <button
                 onClick={() => setSelectedCategory('all')}
-                className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition-all text-xs sm:text-sm ${
                   selectedCategory === 'all'
                     ? 'bg-emerald-100 text-emerald-700 border-2 border-emerald-200'
                     : 'bg-white text-gray-600 border-2 border-gray-200 hover:border-gray-300'
@@ -476,27 +503,31 @@ const Hustles = () => {
                   <button
                     key={category.name}
                     onClick={() => setSelectedCategory(category.name)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                    className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg font-medium transition-all text-xs sm:text-sm ${
                       selectedCategory === category.name
                         ? 'bg-emerald-100 text-emerald-700 border-2 border-emerald-200'
                         : 'bg-white text-gray-600 border-2 border-gray-200 hover:border-gray-300'
                     }`}
                   >
-                    <Icon className="w-4 h-4" />
-                    {category.display}
+                    <Icon className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <span className="hidden sm:inline">{category.display}</span>
+                    <span className="sm:hidden">{category.display.split(' ')[0]}</span>
                   </button>
                 );
               })}
             </div>
 
             {/* Create Button */}
-            <button
-              onClick={() => setShowCreateForm(true)}
-              className="btn-primary flex items-center gap-2 whitespace-nowrap"
-            >
-              <PlusIcon className="w-5 h-5" />
-              Post a Side Hustle
-            </button>
+            <div className="flex justify-end">
+              <button
+                onClick={() => setShowCreateForm(true)}
+                className="btn-primary flex items-center gap-2 text-sm sm:text-base px-4 sm:px-6 py-2 sm:py-3"
+              >
+                <PlusIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="hidden sm:inline">Post a Side Hustle</span>
+                <span className="sm:hidden">Post Hustle</span>
+              </button>
+            </div>
           </div>
 
           {/* Admin-Shared Hustles Section */}
@@ -512,32 +543,33 @@ const Hustles = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
                 {filteredAdminHustles.map((hustle, index) => {
                   const CategoryIcon = categoryIcons[hustle.category] || BriefcaseIcon;
                   
                   return (
                     <div
                       key={hustle.id}
-                      className="hustle-card slide-up border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-white"
+                      className="hustle-card slide-up border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-white p-4 sm:p-6"
                       style={{ animationDelay: `${index * 0.1}s` }}
                     >
                       {/* Header */}
                       <div className="flex items-start justify-between mb-3">
-                        <div className="hustle-category bg-purple-100 text-purple-700">
-                          <CategoryIcon className="w-4 h-4" />
-                          {categories.find(c => c.name === hustle.category)?.display || hustle.category}
+                        <div className="hustle-category bg-purple-100 text-purple-700 text-xs sm:text-sm">
+                          <CategoryIcon className="w-3 h-3 sm:w-4 sm:h-4" />
+                          <span className="hidden sm:inline">{categories.find(c => c.name === hustle.category)?.display || hustle.category}</span>
+                          <span className="sm:hidden">{(categories.find(c => c.name === hustle.category)?.display || hustle.category).split(' ')[0]}</span>
                         </div>
                         
                         <div className="flex items-center gap-1">
-                          <StarIcon className="w-4 h-4 text-purple-500 fill-current" />
+                          <StarIcon className="w-3 h-3 sm:w-4 sm:h-4 text-purple-500 fill-current" />
                           <span className="text-xs font-semibold text-purple-600">Featured</span>
                         </div>
                       </div>
 
                       {/* Title and Description */}
-                      <h3 className="text-lg font-bold text-gray-900 mb-2">{hustle.title}</h3>
-                      <p className="text-gray-600 text-sm mb-4 line-clamp-3">{hustle.description}</p>
+                      <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-2 line-clamp-2">{hustle.title}</h3>
+                      <p className="text-gray-600 text-xs sm:text-sm mb-4 line-clamp-3">{hustle.description}</p>
 
                       {/* Pay and Time */}
                       <div className="flex items-center justify-between mb-4">
@@ -618,7 +650,7 @@ const Hustles = () => {
           </div>
 
           {/* Hustles Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
             {filteredHustles.length > 0 ? (
               filteredHustles.map((hustle, index) => {
                 const CategoryIcon = categoryIcons[hustle.category] || BriefcaseIcon;
@@ -683,9 +715,17 @@ const Hustles = () => {
                         <div className="flex items-center gap-1 text-gray-500 mb-1">
                           <MapPinIcon className="w-3 h-3" />
                           <span className="text-xs">
-                            {typeof hustle.location === 'object' && hustle.location !== null
-                              ? hustle.location.city || hustle.location.area || JSON.stringify(hustle.location)
-                              : hustle.location}
+                            {(() => {
+                              if (typeof hustle.location === 'object' && hustle.location !== null) {
+                                // Handle location object {area, city, state}
+                                const parts = [];
+                                if (hustle.location.area) parts.push(hustle.location.area);
+                                if (hustle.location.city && hustle.location.city !== hustle.location.area) parts.push(hustle.location.city);
+                                if (hustle.location.state) parts.push(hustle.location.state);
+                                return parts.join(', ') || 'Location not specified';
+                              }
+                              return hustle.location || 'Remote';
+                            })()}
                           </span>
                         </div>
                       )}
@@ -938,12 +978,20 @@ const Hustles = () => {
       {/* Create Hustle Modal */}
       {showCreateForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto slide-up">
-            <h2 className="text-2xl font-bold mb-6">Post a Side Hustle</h2>
+          <div className="bg-white rounded-xl p-4 sm:p-6 w-full max-w-4xl max-h-[95vh] overflow-y-auto slide-up">
+            <div className="flex items-center justify-between mb-4 sm:mb-6">
+              <h2 className="text-xl sm:text-2xl font-bold">Post a Side Hustle</h2>
+              <button
+                onClick={() => setShowCreateForm(false)}
+                className="p-2 hover:bg-gray-100 rounded-full"
+              >
+                ✕
+              </button>
+            </div>
             
             <form onSubmit={handleCreateHustle} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Title *
                   </label>
@@ -951,7 +999,7 @@ const Hustles = () => {
                     type="text"
                     value={createFormData.title}
                     onChange={(e) => setCreateFormData({...createFormData, title: e.target.value})}
-                    className="input-modern"
+                    className="input-modern w-full"
                     placeholder="e.g., Math Tutor for High School Students"
                     required
                   />
@@ -1041,9 +1089,10 @@ const Hustles = () => {
                     type="text"
                     value={createFormData.location}
                     onChange={(e) => setCreateFormData({...createFormData, location: e.target.value})}
-                    className="input-modern"
-                    placeholder="Mumbai, Maharashtra"
+                    className="input-modern w-full"
+                    placeholder="Mumbai, New York, Remote, etc."
                   />
+                  <p className="text-xs text-gray-500 mt-1">Enter location in any format you prefer.</p>
                 </div>
 
                 <div>
@@ -1059,7 +1108,7 @@ const Hustles = () => {
                   />
                 </div>
 
-                <div className="md:col-span-2">
+                <div className="sm:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Required Skills (comma-separated) *
                   </label>
@@ -1067,13 +1116,14 @@ const Hustles = () => {
                     type="text"
                     value={createFormData.required_skills}
                     onChange={(e) => setCreateFormData({...createFormData, required_skills: e.target.value})}
-                    className="input-modern"
-                    placeholder="Math, Teaching, Patience"
+                    className="input-modern w-full"
+                    placeholder="Math, Teaching, Patience, Communication"
                     required
                   />
+                  <p className="text-xs text-gray-500 mt-1">Enter skills separated by commas. Any text format is accepted.</p>
                 </div>
 
-                <div className="md:col-span-2">
+                <div className="sm:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Contact Information *
                   </label>
@@ -1081,27 +1131,29 @@ const Hustles = () => {
                     type="text"
                     value={createFormData.contact_info}
                     onChange={(e) => setCreateFormData({...createFormData, contact_info: e.target.value})}
-                    className="input-modern"
-                    placeholder="email@example.com or phone number"
+                    className="input-modern w-full"
+                    placeholder="email@example.com, +91-9876543210, or https://website.com"
                     required
                   />
+                  <p className="text-xs text-gray-500 mt-1">Enter email, phone, or website in any format.</p>
                 </div>
 
-                <div className="md:col-span-2">
+                <div className="sm:col-span-2">
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Description *
                   </label>
                   <textarea
                     value={createFormData.description}
                     onChange={(e) => setCreateFormData({...createFormData, description: e.target.value})}
-                    className="input-modern resize-none"
+                    className="input-modern resize-none w-full"
                     rows="4"
-                    placeholder="Detailed description of the work, requirements, and expectations..."
+                    placeholder="Describe your opportunity, requirements, and expectations in detail..."
                     required
                   />
+                  <p className="text-xs text-gray-500 mt-1">Write freely - any text format is accepted.</p>
                 </div>
 
-                <div className="md:col-span-2">
+                <div className="sm:col-span-2">
                   <div className="flex items-center">
                     <input
                       type="checkbox"
@@ -1116,17 +1168,17 @@ const Hustles = () => {
                 </div>
               </div>
 
-              <div className="flex gap-3 pt-4">
+              <div className="flex flex-col sm:flex-row gap-3 pt-4">
                 <button
                   type="button"
                   onClick={() => setShowCreateForm(false)}
-                  className="btn-secondary flex-1"
+                  className="btn-secondary flex-1 order-2 sm:order-1"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="btn-primary flex-1"
+                  className="btn-primary flex-1 order-1 sm:order-2"
                 >
                   Post Side Hustle
                 </button>
@@ -1155,13 +1207,25 @@ const Hustles = () => {
                   ? editingHustle.required_skills.join(', ') 
                   : editingHustle.required_skills,
                 difficulty_level: editingHustle.difficulty_level,
-                location: typeof editingHustle.location === 'object' 
-                  ? `${editingHustle.location.area || editingHustle.location.city || ''}, ${editingHustle.location.state || ''}`.trim().replace(/^,|,$/, '')
-                  : editingHustle.location,
+                location: (() => {
+                  if (!editingHustle.location) return '';
+                  if (typeof editingHustle.location === 'object') {
+                    const parts = [];
+                    if (editingHustle.location.area) parts.push(editingHustle.location.area);
+                    if (editingHustle.location.city && editingHustle.location.city !== editingHustle.location.area) parts.push(editingHustle.location.city);
+                    if (editingHustle.location.state) parts.push(editingHustle.location.state);
+                    return parts.join(', ');
+                  }
+                  return editingHustle.location;
+                })(),
                 is_remote: editingHustle.is_remote,
-                contact_info: typeof editingHustle.contact_info === 'object'
-                  ? editingHustle.contact_info.email || editingHustle.contact_info.phone || editingHustle.contact_info.website || ''
-                  : editingHustle.contact_info,
+                contact_info: (() => {
+                  if (!editingHustle.contact_info) return '';
+                  if (typeof editingHustle.contact_info === 'object') {
+                    return editingHustle.contact_info.email || editingHustle.contact_info.phone || editingHustle.contact_info.website || '';
+                  }
+                  return editingHustle.contact_info;
+                })(),
                 max_applicants: editingHustle.max_applicants
               };
               handleUpdateHustle(editingHustle.id, updateData);
@@ -1300,9 +1364,17 @@ const Hustles = () => {
                   </label>
                   <input
                     type="text"
-                    value={typeof editingHustle.location === 'object' 
-                      ? `${editingHustle.location.area || editingHustle.location.city || ''}, ${editingHustle.location.state || ''}`.trim().replace(/^,|,$/, '')
-                      : editingHustle.location || ''}
+                    value={(() => {
+                      if (!editingHustle.location) return '';
+                      if (typeof editingHustle.location === 'object') {
+                        const parts = [];
+                        if (editingHustle.location.area) parts.push(editingHustle.location.area);
+                        if (editingHustle.location.city && editingHustle.location.city !== editingHustle.location.area) parts.push(editingHustle.location.city);
+                        if (editingHustle.location.state) parts.push(editingHustle.location.state);
+                        return parts.join(', ');
+                      }
+                      return editingHustle.location;
+                    })()}
                     onChange={(e) => setEditingHustle({...editingHustle, location: e.target.value})}
                     className="input-modern"
                     placeholder="Mumbai, Maharashtra"
@@ -1315,9 +1387,13 @@ const Hustles = () => {
                   </label>
                   <input
                     type="text"
-                    value={typeof editingHustle.contact_info === 'object'
-                      ? editingHustle.contact_info.email || editingHustle.contact_info.phone || editingHustle.contact_info.website || ''
-                      : editingHustle.contact_info || ''}
+                    value={(() => {
+                      if (!editingHustle.contact_info) return '';
+                      if (typeof editingHustle.contact_info === 'object') {
+                        return editingHustle.contact_info.email || editingHustle.contact_info.phone || editingHustle.contact_info.website || '';
+                      }
+                      return editingHustle.contact_info;
+                    })()}
                     onChange={(e) => setEditingHustle({...editingHustle, contact_info: e.target.value})}
                     className="input-modern"
                     placeholder="email@example.com or phone number"
@@ -1418,8 +1494,8 @@ const Hustles = () => {
         </div>
       )}
     </div>
+      </div>
   );
 };
 
 export default Hustles;
-10000

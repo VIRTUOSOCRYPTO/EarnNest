@@ -236,7 +236,21 @@ const Hustles = () => {
       console.error('Error updating hustle:', error);
       console.error('Error response:', error.response?.data);
       console.error('Error status:', error.response?.status);
-      alert(`Failed to update hustle: ${error.response?.data?.detail || error.message}`);
+      
+      let errorMessage = 'Please try again.';
+      if (error.response?.data) {
+        if (typeof error.response.data === 'string') {
+          errorMessage = error.response.data;
+        } else if (error.response.data.detail) {
+          errorMessage = error.response.data.detail;
+        } else if (error.response.data.message) {
+          errorMessage = error.response.data.message;
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      alert(`Failed to update hustle: ${errorMessage}`);
     }
   };
 
@@ -892,77 +906,88 @@ const Hustles = () => {
         <div className="space-y-4">
           {myPostedHustles.length > 0 ? (
             myPostedHustles.map((hustle, index) => (
-              <div key={hustle.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 slide-up" style={{ animationDelay: `${index * 0.1}s` }}>
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-lg font-bold text-gray-900">{hustle.title}</h3>
-                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${getDifficultyColor(hustle.difficulty_level)}`}>
+              <div key={hustle.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6 slide-up" style={{ animationDelay: `${index * 0.1}s` }}>
+                {/* Header with Title and Action Buttons */}
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <h3 className="text-lg font-bold text-gray-900 truncate">{hustle.title}</h3>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getDifficultyColor(hustle.difficulty_level)}`}>
                         {hustle.difficulty_level}
                       </span>
-                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                         hustle.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
                       }`}>
                         {hustle.status}
                       </span>
                     </div>
-                    
-                    <div className="flex items-center gap-4 text-sm text-gray-500 mb-3">
-                      <div className="flex items-center gap-1">
-                        <BriefcaseIcon className="w-4 h-4" />
-                        {categories.find(c => c.name === hustle.category)?.display || hustle.category}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <CurrencyDollarIcon className="w-4 h-4 text-emerald-500" />
-                        <span>{formatCurrency(hustle.pay_rate)}/{hustle.pay_type}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <ClockIcon className="w-4 h-4" />
-                        {hustle.time_commitment}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <UserIcon className="w-4 h-4" />
-                        {hustle.applicants?.length || 0} applicants
-                      </div>
-                    </div>
-
-                    <p className="text-sm text-gray-600 mb-3 line-clamp-2">{hustle.description}</p>
-
-                    <div className="flex flex-wrap gap-1">
-                      {(hustle.required_skills || []).slice(0, 3).map((skill, idx) => (
-                        <span
-                          key={idx}
-                          className="text-xs bg-emerald-100 text-emerald-600 px-2 py-1 rounded-full"
-                        >
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
                   </div>
                   
-                  <div className="flex gap-2 ml-4">
+                  {/* Action Buttons - Always visible and properly positioned */}
+                  <div className="flex items-center gap-1 flex-shrink-0">
                     <button
                       onClick={() => handleUpdateHustle(hustle.id, {status: hustle.status === 'active' ? 'closed' : 'active'})}
-                      className={`px-3 py-1 rounded text-sm font-medium ${
+                      className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${
                         hustle.status === 'active' 
                           ? 'bg-red-100 text-red-700 hover:bg-red-200' 
                           : 'bg-green-100 text-green-700 hover:bg-green-200'
                       }`}
+                      title={hustle.status === 'active' ? 'Close Hustle' : 'Activate Hustle'}
                     >
-                      {hustle.status === 'active' ? 'Close' : 'Activate'}
+                      {hustle.status === 'active' ? 'Close' : 'Open'}
                     </button>
                     <button
                       onClick={() => setEditingHustle(hustle)}
-                      className="p-2 text-gray-400 hover:text-blue-600"
+                      className="p-1.5 text-gray-400 hover:text-blue-600 rounded-md hover:bg-blue-50"
+                      title="Edit Hustle"
                     >
                       <PencilIcon className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => handleDeleteHustle(hustle.id)}
-                      className="p-2 text-gray-400 hover:text-red-600"
+                      className="p-1.5 text-gray-400 hover:text-red-600 rounded-md hover:bg-red-50"
+                      title="Delete Hustle"
                     >
                       <TrashIcon className="w-4 h-4" />
                     </button>
+                  </div>
+                </div>
+
+                {/* Content Section */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-4 text-sm text-gray-500 flex-wrap">
+                    <div className="flex items-center gap-1">
+                      <BriefcaseIcon className="w-4 h-4" />
+                      <span className="truncate">{categories.find(c => c.name === hustle.category)?.display || hustle.category}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <CurrencyDollarIcon className="w-4 h-4 text-emerald-500" />
+                      <span>{formatCurrency(hustle.pay_rate)}/{hustle.pay_type}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <ClockIcon className="w-4 h-4" />
+                      <span className="truncate">{hustle.time_commitment}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <UserIcon className="w-4 h-4" />
+                      <span>{hustle.applicants?.length || 0} applicants</span>
+                    </div>
+                  </div>
+
+                  <p className="text-sm text-gray-600 line-clamp-2">{hustle.description}</p>
+
+                  <div className="flex flex-wrap gap-1">
+                    {(hustle.required_skills || []).slice(0, 3).map((skill, idx) => (
+                      <span
+                        key={idx}
+                        className="text-xs bg-emerald-100 text-emerald-600 px-2 py-1 rounded-full"
+                      >
+                        {skill}
+                      </span>
+                    ))}
+                    {(hustle.required_skills || []).length > 3 && (
+                      <span className="text-xs text-gray-500">+{(hustle.required_skills || []).length - 3} more</span>
+                    )}
                   </div>
                 </div>
               </div>

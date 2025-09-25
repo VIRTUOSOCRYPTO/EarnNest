@@ -1136,6 +1136,244 @@ const Hustles = () => {
         </div>
       )}
 
+      {/* Edit Hustle Modal */}
+      {editingHustle && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto slide-up">
+            <h2 className="text-2xl font-bold mb-6">Edit Side Hustle</h2>
+            
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const updateData = {
+                title: editingHustle.title,
+                description: editingHustle.description,
+                category: editingHustle.category,
+                payment_type: editingHustle.payment_type,
+                payment_amount: editingHustle.payment_amount,
+                time_commitment: editingHustle.time_commitment,
+                required_skills: Array.isArray(editingHustle.required_skills) 
+                  ? editingHustle.required_skills.join(', ') 
+                  : editingHustle.required_skills,
+                difficulty_level: editingHustle.difficulty_level,
+                location: typeof editingHustle.location === 'object' 
+                  ? `${editingHustle.location.area || editingHustle.location.city || ''}, ${editingHustle.location.state || ''}`.trim().replace(/^,|,$/, '')
+                  : editingHustle.location,
+                is_remote: editingHustle.is_remote,
+                contact_info: typeof editingHustle.contact_info === 'object'
+                  ? editingHustle.contact_info.email || editingHustle.contact_info.phone || editingHustle.contact_info.website || ''
+                  : editingHustle.contact_info,
+                max_applicants: editingHustle.max_applicants
+              };
+              handleUpdateHustle(editingHustle.id, updateData);
+            }} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Title *
+                  </label>
+                  <input
+                    type="text"
+                    value={editingHustle.title}
+                    onChange={(e) => setEditingHustle({...editingHustle, title: e.target.value})}
+                    className="input-modern"
+                    placeholder="e.g. Social Media Manager for Local Business"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Category *
+                  </label>
+                  <select
+                    value={editingHustle.category}
+                    onChange={(e) => setEditingHustle({...editingHustle, category: e.target.value})}
+                    className="input-modern"
+                    required
+                  >
+                    <option value="tutoring">📚 Tutoring</option>
+                    <option value="delivery">🚗 Delivery</option>
+                    <option value="design">🎨 Design</option>
+                    <option value="writing">✍️ Writing</option>
+                    <option value="photography">📷 Photography</option>
+                    <option value="social-media">📱 Social Media</option>
+                    <option value="tech">💻 Tech</option>
+                    <option value="cleaning">🧽 Cleaning</option>
+                    <option value="other">🔧 Other</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Payment Type *
+                  </label>
+                  <select
+                    value={editingHustle.payment_type}
+                    onChange={(e) => setEditingHustle({...editingHustle, payment_type: e.target.value})}
+                    className="input-modern"
+                    required
+                  >
+                    <option value="hourly">Per Hour</option>
+                    <option value="fixed">Fixed Price</option>
+                    <option value="commission">Commission</option>
+                    <option value="negotiable">Negotiable</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Payment Amount (₹) *
+                  </label>
+                  <input
+                    type="number"
+                    value={editingHustle.payment_amount}
+                    onChange={(e) => setEditingHustle({...editingHustle, payment_amount: e.target.value})}
+                    className="input-modern"
+                    placeholder="500"
+                    min="0"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Time Commitment *
+                  </label>
+                  <input
+                    type="text"
+                    value={editingHustle.time_commitment}
+                    onChange={(e) => setEditingHustle({...editingHustle, time_commitment: e.target.value})}
+                    className="input-modern"
+                    placeholder="2-3 hours/day"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Required Skills
+                  </label>
+                  <input
+                    type="text"
+                    value={Array.isArray(editingHustle.required_skills) 
+                      ? editingHustle.required_skills.join(', ')
+                      : editingHustle.required_skills || ''}
+                    onChange={(e) => setEditingHustle({...editingHustle, required_skills: e.target.value})}
+                    className="input-modern"
+                    placeholder="e.g. Excel, Communication, Time Management"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Difficulty Level *
+                  </label>
+                  <select
+                    value={editingHustle.difficulty_level}
+                    onChange={(e) => setEditingHustle({...editingHustle, difficulty_level: e.target.value})}
+                    className="input-modern"
+                    required
+                  >
+                    <option value="beginner">Beginner</option>
+                    <option value="intermediate">Intermediate</option>
+                    <option value="advanced">Advanced</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Max Applicants
+                  </label>
+                  <input
+                    type="number"
+                    value={editingHustle.max_applicants}
+                    onChange={(e) => setEditingHustle({...editingHustle, max_applicants: e.target.value})}
+                    className="input-modern"
+                    placeholder="10"
+                    min="1"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Location (if not remote)
+                  </label>
+                  <input
+                    type="text"
+                    value={typeof editingHustle.location === 'object' 
+                      ? `${editingHustle.location.area || editingHustle.location.city || ''}, ${editingHustle.location.state || ''}`.trim().replace(/^,|,$/, '')
+                      : editingHustle.location || ''}
+                    onChange={(e) => setEditingHustle({...editingHustle, location: e.target.value})}
+                    className="input-modern"
+                    placeholder="Mumbai, Maharashtra"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Contact Info *
+                  </label>
+                  <input
+                    type="text"
+                    value={typeof editingHustle.contact_info === 'object'
+                      ? editingHustle.contact_info.email || editingHustle.contact_info.phone || editingHustle.contact_info.website || ''
+                      : editingHustle.contact_info || ''}
+                    onChange={(e) => setEditingHustle({...editingHustle, contact_info: e.target.value})}
+                    className="input-modern"
+                    placeholder="email@example.com or phone number"
+                    required
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Description *
+                  </label>
+                  <textarea
+                    value={editingHustle.description}
+                    onChange={(e) => setEditingHustle({...editingHustle, description: e.target.value})}
+                    className="input-modern resize-none"
+                    rows="4"
+                    placeholder="Detailed description of the work, requirements, and expectations..."
+                    required
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={editingHustle.is_remote}
+                      onChange={(e) => setEditingHustle({...editingHustle, is_remote: e.target.checked})}
+                      className="w-4 h-4 text-emerald-600 rounded mr-2"
+                    />
+                    <label className="text-sm text-gray-700">
+                      This is a remote opportunity
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setEditingHustle(null)}
+                  className="btn-secondary flex-1"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary flex-1"
+                >
+                  Update Hustle
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Application Modal */}
       {showApplicationForm && selectedHustle && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">

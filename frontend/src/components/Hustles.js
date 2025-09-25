@@ -153,8 +153,11 @@ const Hustles = () => {
       };
 
       console.log('Submitting hustle data:', submitData);
+      console.log('Current axios headers:', axios.defaults.headers.common);
 
-      await axios.post(`${API}/hustles/create`, submitData);
+      const response = await axios.post(`${API}/hustles/create`, submitData);
+      console.log('Hustle creation response:', response.data);
+      
       setShowCreateForm(false);
       resetCreateForm();
       
@@ -166,7 +169,22 @@ const Hustles = () => {
       alert('Side hustle posted successfully!');
     } catch (error) {
       console.error('Error creating hustle:', error);
-      const errorMessage = error.response?.data?.detail || 'Failed to create hustle. Please check all required fields.';
+      console.error('Error response:', error.response);
+      
+      let errorMessage = 'Failed to create hustle. Please check all required fields.';
+      
+      if (error.response?.status === 401) {
+        errorMessage = 'Authentication failed. Please login again.';
+      } else if (error.response?.status === 422) {
+        errorMessage = `Validation error: ${error.response.data?.detail || 'Invalid data provided'}`;
+      } else if (error.response?.data?.detail) {
+        if (Array.isArray(error.response.data.detail)) {
+          errorMessage = error.response.data.detail.map(e => e.msg).join(', ');
+        } else {
+          errorMessage = error.response.data.detail;
+        }
+      }
+      
       alert(errorMessage);
     }
   };
@@ -203,11 +221,29 @@ const Hustles = () => {
     if (!window.confirm('Are you sure you want to delete this hustle?')) return;
     
     try {
-      await axios.delete(`${API}/hustles/${hustleId}`);
+      console.log('Deleting hustle:', hustleId);
+      console.log('Current axios headers:', axios.defaults.headers.common);
+      
+      const response = await axios.delete(`${API}/hustles/${hustleId}`);
+      console.log('Delete response:', response.data);
+      
       fetchData(); // Refresh the data
+      alert('Hustle deleted successfully!');
     } catch (error) {
       console.error('Error deleting hustle:', error);
-      alert('Failed to delete hustle. Please try again.');
+      console.error('Delete error response:', error.response);
+      
+      let errorMessage = 'Failed to delete hustle. Please try again.';
+      
+      if (error.response?.status === 401) {
+        errorMessage = 'Authentication failed. Please login again.';
+      } else if (error.response?.status === 404) {
+        errorMessage = 'Hustle not found or already deleted.';
+      } else if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail;
+      }
+      
+      alert(errorMessage);
     }
   };
 
@@ -646,7 +682,11 @@ const Hustles = () => {
                       {hustle.location && (
                         <div className="flex items-center gap-1 text-gray-500 mb-1">
                           <MapPinIcon className="w-3 h-3" />
-                          <span className="text-xs">{hustle.location}</span>
+                          <span className="text-xs">
+                            {typeof hustle.location === 'object' && hustle.location !== null
+                              ? hustle.location.city || hustle.location.area || JSON.stringify(hustle.location)
+                              : hustle.location}
+                          </span>
                         </div>
                       )}
                     </div>

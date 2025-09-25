@@ -7,5 +7,6 @@ pydantic[email]==2.10.6
 python-multipart==0.0.19
 emergentintegrations
 slowapi==0.1.9
+limits==3.13.0
 passlib==1.7.4
 email-validator==2.2.0

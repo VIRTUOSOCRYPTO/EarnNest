@@ -260,21 +260,32 @@ const Hustles = () => {
   const getContactType = (contactInfo) => {
     if (!contactInfo) return 'unknown';
     
+    // Handle object format from backend (e.g., {email: "...", phone: "...", website: "..."})
+    if (typeof contactInfo === 'object' && contactInfo !== null) {
+      if (contactInfo.email) return 'email';
+      if (contactInfo.phone) return 'phone';
+      if (contactInfo.website) return 'website';
+      return 'unknown';
+    }
+    
+    // Handle string format
+    const contactString = String(contactInfo);
+    
     // Email pattern
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (emailRegex.test(contactInfo)) {
+    if (emailRegex.test(contactString)) {
       return 'email';
     }
     
     // Phone pattern (international and Indian)
     const phoneRegex = /^[\+]?[1-9][\d]{3,14}$/;
-    if (phoneRegex.test(contactInfo.replace(/[\s\-\(\)]/g, ''))) {
+    if (phoneRegex.test(contactString.replace(/[\s\-\(\)]/g, ''))) {
       return 'phone';
     }
     
     // URL pattern
     const urlRegex = /^https?:\/\/[^\s]+$/;
-    if (urlRegex.test(contactInfo)) {
+    if (urlRegex.test(contactString)) {
       return 'website';
     }
     
@@ -282,21 +293,38 @@ const Hustles = () => {
   };
 
   const handleContactClick = (contactInfo, contactType = null) => {
+    if (!contactInfo) return;
+    
     const type = contactType || getContactType(contactInfo);
+    let contactValue = contactInfo;
+    
+    // Extract actual contact value from object format
+    if (typeof contactInfo === 'object' && contactInfo !== null) {
+      if (type === 'email' && contactInfo.email) {
+        contactValue = contactInfo.email;
+      } else if (type === 'phone' && contactInfo.phone) {
+        contactValue = contactInfo.phone;
+      } else if (type === 'website' && contactInfo.website) {
+        contactValue = contactInfo.website;
+      } else {
+        // Fallback to first available contact method
+        contactValue = contactInfo.email || contactInfo.phone || contactInfo.website || String(contactInfo);
+      }
+    }
     
     switch (type) {
       case 'email':
-        window.location.href = `mailto:${contactInfo}`;
+        window.location.href = `mailto:${contactValue}`;
         break;
       case 'phone':
-        window.location.href = `tel:${contactInfo}`;
+        window.location.href = `tel:${contactValue}`;
         break;
       case 'website':
-        window.open(contactInfo, '_blank', 'noopener,noreferrer');
+        window.open(contactValue, '_blank', 'noopener,noreferrer');
         break;
       default:
         // Fallback - copy to clipboard
-        navigator.clipboard.writeText(contactInfo);
+        navigator.clipboard.writeText(String(contactValue));
         alert('Contact information copied to clipboard!');
     }
   };
@@ -1116,3 +1144,4 @@ const Hustles = () => {
 };
 
 export default Hustles;
+10000

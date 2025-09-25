@@ -18,20 +18,14 @@ const Profile = () => {
   const { user, updateUser } = useAuth();
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [avatars, setAvatars] = useState([]);
   const [formData, setFormData] = useState({
     full_name: '',
     skills: '',
     availability_hours: 10,
     location: '',
     bio: '',
-    student_level: 'undergraduate',
-    avatar: 'boy'
+    student_level: 'undergraduate'
   });
-
-  useEffect(() => {
-    fetchAvatars();
-  }, []);
 
   // Update formData when user data changes
   useEffect(() => {
@@ -42,20 +36,10 @@ const Profile = () => {
         availability_hours: user.availability_hours || 10,
         location: user.location || '',
         bio: user.bio || '',
-        student_level: user.student_level || 'undergraduate',
-        avatar: user.avatar || 'boy'
+        student_level: user.student_level || 'undergraduate'
       });
     }
   }, [user]);
-
-  const fetchAvatars = async () => {
-    try {
-      const response = await axios.get(`${API}/auth/avatars`);
-      setAvatars(response.data.avatars);
-    } catch (error) {
-      console.error('Error fetching avatars:', error);
-    }
-  };
 
   const handleChange = (e) => {
     setFormData({
@@ -89,16 +73,9 @@ const Profile = () => {
     }
   };
 
-  const getAvatarImage = (avatarType) => {
-    const avatarMap = {
-      boy: 'https://images.unsplash.com/photo-1606209331994-fcf81b3f5e23?w=100&h=100&fit=crop&crop=face',
-      man: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face',
-      girl: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=100&h=100&fit=crop&crop=face',
-      woman: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop&crop=face',
-      grandfather: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face',
-      grandmother: 'https://images.unsplash.com/photo-1594736797933-d0651ba42e6d?w=100&h=100&fit=crop&crop=face'
-    };
-    return avatarMap[avatarType] || avatarMap.boy;
+  // Get first letter of user's name for avatar
+  const getFirstLetter = () => {
+    return (user?.full_name || user?.email || 'U').charAt(0).toUpperCase();
   };
 
   const getStudentLevelDisplay = (level) => {
@@ -125,12 +102,10 @@ const Profile = () => {
             <div className="text-center">
               {/* Profile Avatar */}
               <div className="relative inline-block mb-4">
-                <div className="w-32 h-32 rounded-full overflow-hidden bg-gray-100 border-4 border-white shadow-lg">
-                  <img
-                    src={getAvatarImage(user?.avatar || 'boy')}
-                    alt="Profile Avatar"
-                    className="w-full h-full object-cover"
-                  />
+                <div className="w-32 h-32 rounded-full bg-emerald-500 border-4 border-white shadow-lg flex items-center justify-center">
+                  <span className="text-white text-4xl font-bold">
+                    {getFirstLetter()}
+                  </span>
                 </div>
                 
                 {editing && (
@@ -224,38 +199,6 @@ const Profile = () => {
                       <option value="undergraduate">Undergraduate</option>
                       <option value="graduate">Graduate</option>
                     </select>
-                  </div>
-                </div>
-
-                {/* Avatar Selection */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">
-                    Avatar Selection
-                  </label>
-                  <div className="grid grid-cols-3 gap-3">
-                    {['boy', 'man', 'girl', 'woman', 'grandfather', 'grandmother'].map((avatarType) => (
-                      <div
-                        key={avatarType}
-                        onClick={() => setFormData({...formData, avatar: avatarType})}
-                        className={`cursor-pointer rounded-lg border-2 p-3 text-center transition-all ${
-                          formData.avatar === avatarType
-                            ? 'border-emerald-500 bg-emerald-50'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <img
-                          src={getAvatarImage(avatarType)}
-                          alt={avatarType}
-                          className="w-12 h-12 rounded-full mx-auto mb-2 object-cover"
-                        />
-                        <span className="text-xs font-medium text-gray-700 capitalize">
-                          {avatarType === 'grandfather' ? 'Grandpa' : avatarType === 'grandmother' ? 'Grandma' : avatarType}
-                        </span>
-                        {formData.avatar === avatarType && (
-                          <CheckCircleIcon className="w-4 h-4 text-emerald-600 mx-auto mt-1" />
-                        )}
-                      </div>
-                    ))}
                   </div>
                 </div>
 

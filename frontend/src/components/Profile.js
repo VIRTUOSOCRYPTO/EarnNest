@@ -20,18 +20,33 @@ const Profile = () => {
   const [loading, setLoading] = useState(false);
   const [avatars, setAvatars] = useState([]);
   const [formData, setFormData] = useState({
-    full_name: user?.full_name || '',
-    skills: user?.skills?.join(', ') || '',
-    availability_hours: user?.availability_hours || 10,
-    location: user?.location || '',
-    bio: user?.bio || '',
-    student_level: user?.student_level || 'undergraduate',
-    avatar: user?.avatar || 'boy'
+    full_name: '',
+    skills: '',
+    availability_hours: 10,
+    location: '',
+    bio: '',
+    student_level: 'undergraduate',
+    avatar: 'boy'
   });
 
   useEffect(() => {
     fetchAvatars();
   }, []);
+
+  // Update formData when user data changes
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        full_name: user.full_name || '',
+        skills: Array.isArray(user.skills) ? user.skills.join(', ') : '',
+        availability_hours: user.availability_hours || 10,
+        location: user.location || '',
+        bio: user.bio || '',
+        student_level: user.student_level || 'undergraduate',
+        avatar: user.avatar || 'boy'
+      });
+    }
+  }, [user]);
 
   const fetchAvatars = async () => {
     try {
@@ -387,7 +402,9 @@ const Profile = () => {
                 {user.achievements.map((achievement, index) => (
                   <div key={index} className="achievement-badge">
                     <StarIcon className="w-4 h-4" />
-                    {achievement}
+                    {typeof achievement === 'object' && achievement !== null 
+                      ? achievement.title || achievement.description || JSON.stringify(achievement)
+                      : achievement}
                   </div>
                 ))}
               </div>

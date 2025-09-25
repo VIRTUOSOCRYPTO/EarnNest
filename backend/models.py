@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, EmailStr, validator, root_validator
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from datetime import datetime, timezone
 import uuid
 import re
@@ -402,11 +402,77 @@ class UserHustleCreate(BaseModel):
     time_commitment: str
     required_skills: List[str]
     difficulty_level: str
-    location: Optional[LocationInfo] = None
+    location: Optional[Union[str, LocationInfo]] = None
     is_remote: bool = True
-    contact_info: ContactInfo
+    contact_info: Union[str, ContactInfo]
     application_deadline: Optional[datetime] = None
     max_applicants: Optional[int] = None
+
+    @root_validator(pre=True)
+    def parse_flexible_inputs(cls, values):
+        """Convert string inputs to structured objects"""
+        
+        # Handle contact_info - accept string or object
+        contact_info = values.get('contact_info')
+        if isinstance(contact_info, str) and contact_info:
+            # Parse string into ContactInfo object
+            contact_obj = {}
+            contact_str = contact_info.strip()
+            
+            # Email pattern
+            if '@' in contact_str and '.' in contact_str:
+                contact_obj['email'] = contact_str
+            # Phone pattern (accept various formats)
+            elif any(char.isdigit() for char in contact_str):
+                # Clean phone number - remove spaces, dashes, parentheses, plus signs
+                clean_phone = re.sub(r'[\s\-\(\)\+]', '', contact_str)
+                # Convert to expected format (e.g., +91-xxx becomes 91xxx)
+                if clean_phone.startswith('91') and len(clean_phone) >= 10:
+                    contact_obj['phone'] = clean_phone
+                elif len(clean_phone) >= 10:
+                    contact_obj['phone'] = clean_phone
+            # Website pattern
+            elif contact_str.startswith(('http://', 'https://')):
+                contact_obj['website'] = contact_str
+            else:
+                # Default to email if it contains @, otherwise phone
+                if '@' in contact_str:
+                    contact_obj['email'] = contact_str
+                else:
+                    contact_obj['phone'] = contact_str
+                    
+            values['contact_info'] = contact_obj
+        
+        # Handle location - accept string or object  
+        location = values.get('location')
+        if isinstance(location, str) and location:
+            location_str = location.strip()
+            # Simple parsing - split by comma if available
+            if ',' in location_str:
+                parts = [p.strip() for p in location_str.split(',')]
+                if len(parts) >= 2:
+                    values['location'] = {
+                        'area': parts[0],
+                        'city': parts[0], 
+                        'state': parts[-1]
+                    }
+                else:
+                    values['location'] = {
+                        'area': location_str,
+                        'city': location_str,
+                        'state': location_str
+                    }
+            else:
+                # Single string - use as all fields
+                values['location'] = {
+                    'area': location_str,
+                    'city': location_str, 
+                    'state': location_str
+                }
+        elif location == '':
+            values['location'] = None
+            
+        return values
 
     @validator('title')
     def validate_title(cls, v):
@@ -416,7 +482,7 @@ class UserHustleCreate(BaseModel):
             raise ValueError('Title cannot exceed 100 characters')
         return v.strip()
 
-    @validator('description')
+    @validator('description')  
     def validate_description(cls, v):
         if len(v.strip()) < 20:
             raise ValueError('Description must be at least 20 characters long')
@@ -433,12 +499,80 @@ class UserHustleUpdate(BaseModel):
     time_commitment: Optional[str] = None
     required_skills: Optional[List[str]] = None
     difficulty_level: Optional[str] = None
-    location: Optional[LocationInfo] = None
+    location: Optional[Union[str, LocationInfo]] = None
     is_remote: Optional[bool] = None
-    contact_info: Optional[ContactInfo] = None
+    contact_info: Optional[Union[str, ContactInfo]] = None
     application_deadline: Optional[datetime] = None
     max_applicants: Optional[int] = None
     status: Optional[str] = None
+
+    @root_validator(pre=True)
+    def parse_flexible_inputs(cls, values):
+        """Convert string inputs to structured objects"""
+        
+        # Handle contact_info - accept string or object
+        contact_info = values.get('contact_info')
+        if isinstance(contact_info, str) and contact_info:
+            # Parse string into ContactInfo object
+            contact_obj = {}
+            contact_str = contact_info.strip()
+            
+            # Email pattern
+            if '@' in contact_str and '.' in contact_str:
+                contact_obj['email'] = contact_str
+            # Phone pattern (accept various formats)
+            elif any(char.isdigit() for char in contact_str):
+                # Clean phone number - remove spaces, dashes, parentheses, plus signs
+                clean_phone = re.sub(r'[\s\-\(\)\+]', '', contact_str)
+                # Convert to expected format (e.g., +91-xxx becomes 91xxx)
+                if clean_phone.startswith('91') and len(clean_phone) >= 10:
+                    contact_obj['phone'] = clean_phone
+                elif len(clean_phone) >= 10:
+                    contact_obj['phone'] = clean_phone
+            # Website pattern
+            elif contact_str.startswith(('http://', 'https://')):
+                contact_obj['website'] = contact_str
+            else:
+                # Default to email if it contains @, otherwise phone
+                if '@' in contact_str:
+                    contact_obj['email'] = contact_str
+                else:
+                    contact_obj['phone'] = contact_str
+                    
+            values['contact_info'] = contact_obj
+        elif contact_info == '':
+            values['contact_info'] = None
+        
+        # Handle location - accept string or object  
+        location = values.get('location')
+        if isinstance(location, str) and location:
+            location_str = location.strip()
+            # Simple parsing - split by comma if available
+            if ',' in location_str:
+                parts = [p.strip() for p in location_str.split(',')]
+                if len(parts) >= 2:
+                    values['location'] = {
+                        'area': parts[0],
+                        'city': parts[0], 
+                        'state': parts[-1]
+                    }
+                else:
+                    values['location'] = {
+                        'area': location_str,
+                        'city': location_str,
+                        'state': location_str
+                    }
+            else:
+                # Single string - use as all fields
+                values['location'] = {
+                    'area': location_str,
+                    'city': location_str, 
+                    'state': location_str
+                }
+        elif location == '':
+            values['location'] = None
+            
+        return values
 
     @validator('title')
     def validate_title(cls, v):

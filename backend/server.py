@@ -1436,6 +1436,231 @@ async def update_user_status(request: Request, user_id: str, is_active: bool, ad
 # Include the router in the main app
 app.include_router(api_router)
 
+# Category Suggestions and Emergency Features Routes
+@api_router.get("/category-suggestions/{category}")
+@limiter.limit("30/minute")
+async def get_category_suggestions_endpoint(request: Request, category: str, user_id: str = Depends(get_current_user)):
+    """Get app/website suggestions for a transaction category"""
+    try:
+        suggestions = await get_category_suggestions(category)
+        
+        # Get popular suggestions based on user clicks (analytics)
+        popular_suggestions = await get_popular_suggestions(category)
+        popular_names = {item["_id"] for item in popular_suggestions}
+        
+        # Mark popular suggestions and sort by priority + popularity
+        for suggestion in suggestions:
+            suggestion["is_popular"] = suggestion["name"] in popular_names
+            suggestion["click_count"] = next(
+                (item["click_count"] for item in popular_suggestions if item["_id"] == suggestion["name"]), 
+                0
+            )
+        
+        # Sort by popularity (click count) first, then priority
+        suggestions.sort(key=lambda x: (x["click_count"], x["priority"]), reverse=True)
+        
+        return {
+            "category": category,
+            "suggestions": [CategorySuggestion(**s) for s in suggestions],
+            "total_count": len(suggestions)
+        }
+        
+    except Exception as e:
+        logger.error(f"Category suggestions error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get category suggestions")
+
+@api_router.post("/track-suggestion-click")
+@limiter.limit("50/minute")
+async def track_suggestion_click_endpoint(request: Request, analytics_data: ClickAnalyticsCreate, user_id: str = Depends(get_current_user)):
+    """Track user clicks on category suggestions for analytics"""
+    try:
+        analytics_dict = analytics_data.dict()
+        analytics_dict["user_id"] = user_id
+        
+        await create_click_analytics(analytics_dict)
+        return {"message": "Click tracked successfully"}
+        
+    except Exception as e:
+        logger.error(f"Click tracking error: {str(e)}")
+        # Don't raise exception for analytics failures
+        return {"message": "Click tracking failed but request continues"}
+
+@api_router.get("/emergency/types")
+@limiter.limit("20/minute")
+async def get_emergency_types_endpoint(request: Request, user_id: str = Depends(get_current_user)):
+    """Get all emergency types for Emergency Fund category"""
+    try:
+        emergency_types = await get_emergency_types()
+        return {
+            "emergency_types": [EmergencyType(**et) for et in emergency_types]
+        }
+        
+    except Exception as e:
+        logger.error(f"Emergency types error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get emergency types")
+
+@api_router.get("/emergency/hospitals")
+@limiter.limit("10/minute")
+async def get_emergency_hospitals_endpoint(
+    request: Request, 
+    user_id: str = Depends(get_current_user),
+    city: str = None,
+    state: str = None,
+    latitude: float = None,
+    longitude: float = None,
+    emergency_type: str = None,
+    limit: int = 10
+):
+    """Get nearby hospitals and top-rated hospitals based on location"""
+    try:
+        hospitals = []
+        
+        # If coordinates provided, get nearby hospitals
+        if latitude is not None and longitude is not None:
+            nearby_hospitals = await get_nearby_hospitals(latitude, longitude, limit=limit//2)
+            hospitals.extend(nearby_hospitals)
+        
+        # Get hospitals by city/state (top-rated hospitals)
+        if city:
+            city_hospitals = await get_hospitals_by_location(city, state, limit=limit//2)
+            hospitals.extend(city_hospitals)
+        elif not hospitals:
+            # If no location provided, get some default top hospitals
+            default_hospitals = await get_hospitals_by_location("Mumbai", "Maharashtra", limit=limit)
+            hospitals.extend(default_hospitals)
+        
+        # Remove duplicates and limit results
+        unique_hospitals = {}
+        for hospital in hospitals:
+            hospital_id = hospital.get("id", hospital.get("name"))
+            if hospital_id not in unique_hospitals:
+                unique_hospitals[hospital_id] = hospital
+        
+        final_hospitals = list(unique_hospitals.values())[:limit]
+        
+        return {
+            "hospitals": [Hospital(**h) for h in final_hospitals],
+            "total_count": len(final_hospitals),
+            "search_criteria": {
+                "city": city,
+                "state": state,
+                "coordinates": f"{latitude}, {longitude}" if latitude and longitude else None,
+                "emergency_type": emergency_type
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Emergency hospitals error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get emergency hospitals")
+
+@api_router.get("/price-comparison")
+@limiter.limit("10/minute")
+async def get_price_comparison_endpoint(
+    request: Request, 
+    query_data: PriceComparisonQuery = Depends(), 
+    user_id: str = Depends(get_current_user)
+):
+    """Get price comparison suggestions for shopping category"""
+    try:
+        # For now, return static platform suggestions with search URLs
+        # In future, this could integrate with actual price comparison APIs
+        
+        platforms = [
+            {
+                "name": "Amazon",
+                "url": f"https://amazon.in/s?k={query_data.product_name.replace(' ', '+')}",
+                "logo_url": "https://logo.clearbit.com/amazon.in",
+                "description": "Wide selection with fast delivery",
+                "pros": ["Fast delivery", "Wide selection", "Prime benefits"],
+                "estimated_delivery": "1-2 days"
+            },
+            {
+                "name": "Flipkart",
+                "url": f"https://flipkart.com/search?q={query_data.product_name.replace(' ', '+')}",
+                "logo_url": "https://logo.clearbit.com/flipkart.com",
+                "description": "Indian e-commerce leader",
+                "pros": ["Local brand", "Good customer service", "Competitive prices"],
+                "estimated_delivery": "2-3 days"
+            },
+            {
+                "name": "Meesho",
+                "url": f"https://meesho.com/search?query={query_data.product_name.replace(' ', '+')}",
+                "logo_url": "https://logo.clearbit.com/meesho.com",
+                "description": "Best prices from local suppliers",
+                "pros": ["Lowest prices", "Local suppliers", "No minimum order"],
+                "estimated_delivery": "3-7 days"
+            },
+            {
+                "name": "Myntra",
+                "url": f"https://myntra.com/{query_data.product_name.replace(' ', '-')}",
+                "logo_url": "https://logo.clearbit.com/myntra.com",
+                "description": "Fashion and lifestyle specialist",
+                "pros": ["Fashion focus", "Brand authenticity", "Easy returns"],
+                "estimated_delivery": "2-4 days"
+            },
+            {
+                "name": "Ajio",
+                "url": f"https://ajio.com/search/{query_data.product_name.replace(' ', '-')}",
+                "logo_url": "https://logo.clearbit.com/ajio.com",
+                "description": "Trendy fashion destination",
+                "pros": ["Trendy items", "Reliance brand", "Good quality"],
+                "estimated_delivery": "3-5 days"
+            }
+        ]
+        
+        return {
+            "product_name": query_data.product_name,
+            "category": query_data.category,
+            "platforms": platforms,
+            "comparison_tips": [
+                "Check customer reviews and ratings",
+                "Compare delivery times and charges",
+                "Look for ongoing offers and discounts",
+                "Verify seller ratings and return policies",
+                "Consider total cost including delivery"
+            ],
+            "last_updated": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Price comparison error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get price comparison")
+
+@api_router.get("/categories/all-suggestions")
+@limiter.limit("20/minute")
+async def get_all_category_suggestions_endpoint(request: Request, user_id: str = Depends(get_current_user)):
+    """Get suggestions for all categories - useful for the dedicated recommendations page"""
+    try:
+        # Get all unique categories
+        categories = ["Movies", "Transportation", "Shopping", "Food", "Groceries", "Entertainment", "Books"]
+        
+        all_suggestions = {}
+        for category in categories:
+            suggestions = await get_category_suggestions(category)
+            popular = await get_popular_suggestions(category, days=30)
+            popular_names = {item["_id"] for item in popular}
+            
+            # Add popularity info
+            for suggestion in suggestions:
+                suggestion["is_popular"] = suggestion["name"] in popular_names
+                suggestion["click_count"] = next(
+                    (item["click_count"] for item in popular if item["_id"] == suggestion["name"]), 
+                    0
+                )
+            
+            # Sort by popularity and priority
+            suggestions.sort(key=lambda x: (x["click_count"], x["priority"]), reverse=True)
+            all_suggestions[category] = suggestions[:5]  # Limit to top 5 per category
+        
+        return {
+            "categories": all_suggestions,
+            "total_categories": len(categories)
+        }
+        
+    except Exception as e:
+        logger.error(f"All category suggestions error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get all category suggestions")
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,

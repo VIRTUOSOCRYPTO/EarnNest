@@ -10,7 +10,10 @@ import {
   TagIcon,
   LinkIcon,
   StarIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  CheckCircleIcon,
+  ClockIcon,
+  CurrencyRupeeIcon
 } from '@heroicons/react/24/outline';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -35,6 +38,12 @@ const Transactions = () => {
   const [showHospitals, setShowHospitals] = useState(false);
   const [nearbyHospitals, setNearbyHospitals] = useState([]);
   const [userLocation, setUserLocation] = useState(null);
+  
+  // Smart Return Detection states
+  const [showReturnPrompt, setShowReturnPrompt] = useState(false);
+  const [visitedApp, setVisitedApp] = useState(null);
+  const [quickAddData, setQuickAddData] = useState({});
+  const [isQuickAdding, setIsQuickAdding] = useState(false);
   
   const [formData, setFormData] = useState({
     type: 'income',
@@ -62,6 +71,77 @@ const Transactions = () => {
   useEffect(() => {
     fetchTransactions();
   }, []);
+
+  useEffect(() => {
+    // Check for return from app on component mount
+    checkForReturnFromApp();
+    
+    // Listen for window focus to detect return
+    const handleWindowFocus = () => {
+      setTimeout(() => {
+        checkForReturnFromApp();
+      }, 1000); // Small delay to allow tab switching
+    };
+    
+    window.addEventListener('focus', handleWindowFocus);
+    
+    return () => {
+      window.removeEventListener('focus', handleWindowFocus);
+    };
+  }, []);
+
+  // Smart Return Detection - Check if user returned from an app
+  const checkForReturnFromApp = () => {
+    const visitData = sessionStorage.getItem('earnest_app_visit');
+    if (visitData) {
+      try {
+        const { app, category, timestamp } = JSON.parse(visitData);
+        const now = new Date().getTime();
+        const visitTime = new Date(timestamp).getTime();
+        
+        // Show prompt if return is within 30 minutes and not already shown
+        if ((now - visitTime) < 30 * 60 * 1000 && !sessionStorage.getItem('earnest_prompt_shown')) {
+          setVisitedApp(app);
+          setShowReturnPrompt(true);
+          
+          // Pre-fill quick add data based on visited app
+          const commonAmounts = getCommonAmounts(app.name);
+          setQuickAddData({
+            category: category,
+            merchant: app.name,
+            commonAmounts: commonAmounts,
+            suggestedDescription: `${app.name} - Quick Purchase`
+          });
+          
+          // Mark prompt as shown
+          sessionStorage.setItem('earnest_prompt_shown', 'true');
+        }
+      } catch (error) {
+        console.error('Error parsing visit data:', error);
+      }
+    }
+  };
+
+  // Get common purchase amounts for different apps
+  const getCommonAmounts = (appName) => {
+    const amounts = {
+      'Zomato': [150, 250, 400, 600],
+      'Swiggy': [180, 300, 450, 650], 
+      'McDonald\'s': [200, 350, 500, 750],
+      'Domino\'s': [300, 500, 800, 1200],
+      'KFC': [250, 400, 600, 900],
+      'Dunzo': [100, 200, 300, 500],
+      'BookMyShow': [200, 400, 600, 1000],
+      'Uber': [50, 100, 200, 350],
+      'Rapido': [25, 50, 75, 150],
+      'Amazon': [500, 1000, 2000, 5000],
+      'Flipkart': [600, 1200, 2500, 5000],
+      'Netflix': [199, 499, 649, 999],
+      'Spotify': [119, 199, 389, 579]
+    };
+    
+    return amounts[appName] || [100, 200, 500, 1000];
+  };
 
   // Fetch app suggestions when category is selected
   const fetchAppSuggestions = async (category) => {
@@ -147,10 +227,103 @@ const Transactions = () => {
     }
   };
 
-  // Handle app suggestion click
+  // Enhanced app suggestion click with tracking
   const handleAppSuggestionClick = (app) => {
+    // Store visit data for return detection
+    const visitData = {
+      app: app,
+      category: formData.category || 'General',
+      timestamp: new Date().toISOString(),
+      sessionId: Date.now() + Math.random()
+    };
+    
+    sessionStorage.setItem('earnest_app_visit', JSON.stringify(visitData));
+    sessionStorage.removeItem('earnest_prompt_shown'); // Reset prompt flag
+    
+    // Add tracking parameters to URL if possible
+    let trackingUrl = app.url;
+    try {
+      const url = new URL(app.url);
+      url.searchParams.append('utm_source', 'earnest');
+      url.searchParams.append('utm_medium', 'expense_tracker');
+      url.searchParams.append('utm_campaign', 'smart_suggestions');
+      trackingUrl = url.toString();
+    } catch (error) {
+      // Use original URL if parsing fails
+      trackingUrl = app.url;
+    }
+    
+    // Show loading indicator on the app card
+    const appElement = document.getElementById(`app-${app.name.replace(/\s+/g, '')}`);
+    if (appElement) {
+      appElement.style.opacity = '0.7';
+      appElement.style.transform = 'scale(0.98)';
+    }
+    
     // Open URL in new tab
-    window.open(app.url, '_blank', 'noopener,noreferrer');
+    window.open(trackingUrl, '_blank', 'noopener,noreferrer');
+    
+    // Reset app card appearance after delay
+    setTimeout(() => {
+      if (appElement) {
+        appElement.style.opacity = '1';
+        appElement.style.transform = 'scale(1)';
+      }
+    }, 1000);
+  };
+
+  // Quick add transaction from return prompt
+  const handleQuickAdd = async (amount, customAmount = null) => {
+    setIsQuickAdding(true);
+    
+    try {
+      const finalAmount = customAmount || amount;
+      const transactionData = {
+        type: 'expense',
+        amount: parseFloat(finalAmount),
+        category: quickAddData.category,
+        description: `${quickAddData.merchant} - Auto-detected purchase`,
+        source: '',
+        is_hustle_related: false
+      };
+
+      // Validate budget for expense
+      const error = await validateExpenseBudget(quickAddData.category, parseFloat(finalAmount));
+      if (error) {
+        alert(error);
+        return;
+      }
+
+      await axios.post(`${API}/transactions`, transactionData);
+      
+      // Success feedback
+      setShowReturnPrompt(false);
+      sessionStorage.removeItem('earnest_app_visit');
+      sessionStorage.removeItem('earnest_prompt_shown');
+      
+      // Refresh transactions
+      fetchTransactions();
+      
+      // Show success message
+      alert(`✅ Transaction added successfully! ₹${finalAmount} spent at ${quickAddData.merchant}`);
+      
+    } catch (error) {
+      console.error('Error creating quick transaction:', error);
+      if (error.response?.data?.detail) {
+        alert(error.response.data.detail);
+      } else {
+        alert('Failed to create transaction. Please try again.');
+      }
+    } finally {
+      setIsQuickAdding(false);
+    }
+  };
+
+  // Dismiss return prompt
+  const dismissReturnPrompt = () => {
+    setShowReturnPrompt(false);
+    sessionStorage.removeItem('earnest_app_visit');
+    sessionStorage.removeItem('earnest_prompt_shown');
   };
 
   const fetchTransactions = async () => {
@@ -747,13 +920,20 @@ const Transactions = () => {
                             Loading app suggestions...
                           </div>
                         ) : appSuggestions.length > 0 ? (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div>
+                            <div className="mb-3 p-2 bg-gradient-to-r from-blue-100 to-indigo-100 rounded-lg">
+                              <p className="text-xs text-blue-800 text-center">
+                                💡 <strong>Smart Tracking:</strong> We'll detect when you return and help you quickly add transactions!
+                              </p>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             {appSuggestions.slice(0, 6).map((app, index) => (
                               <button
                                 key={index}
+                                id={`app-${app.name.replace(/\s+/g, '')}`}
                                 type="button"
                                 onClick={() => handleAppSuggestionClick(app)}
-                                className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all duration-200 text-left group"
+                                className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all duration-200 text-left group relative"
                               >
                                 <div className="flex-shrink-0">
                                   <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center text-white text-sm">
@@ -775,12 +955,16 @@ const Transactions = () => {
                                     </p>
                                   )}
                                   <div className="text-xs text-blue-600 capitalize">
-                                    {app.type}
+                                    {app.type} • Click to visit & track
                                   </div>
                                 </div>
-                                <LinkIcon className="w-4 h-4 text-gray-400 group-hover:text-blue-600 transition-colors" />
+                                <div className="flex flex-col items-center gap-1">
+                                  <LinkIcon className="w-4 h-4 text-gray-400 group-hover:text-blue-600 transition-colors" />
+                                  <div className="w-2 h-2 bg-green-400 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                </div>
                               </button>
                             ))}
+                            </div>
                           </div>
                         ) : (
                           <p className="text-sm text-gray-600">No app suggestions available for this category.</p>
@@ -962,6 +1146,105 @@ const Transactions = () => {
           </div>
         )}
       </div>
+
+      {/* Smart Return Prompt Modal */}
+      {showReturnPrompt && visitedApp && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md slide-up shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center">
+                <CheckCircleIcon className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Welcome back!</h3>
+                <p className="text-sm text-gray-600">Did you make a purchase at {visitedApp.name}?</p>
+              </div>
+            </div>
+
+            <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <ClockIcon className="w-4 h-4 text-blue-600" />
+                <span className="text-sm font-medium text-blue-800">Quick Add Options</span>
+              </div>
+              <p className="text-xs text-blue-700">
+                Category: {quickAddData.category} • Merchant: {quickAddData.merchant}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              {quickAddData.commonAmounts?.map((amount, index) => (
+                <button
+                  key={index}
+                  onClick={() => handleQuickAdd(amount)}
+                  disabled={isQuickAdding}
+                  className="flex items-center justify-center gap-2 p-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg transition-all duration-200 hover:scale-105 disabled:opacity-50"
+                >
+                  <CurrencyRupeeIcon className="w-4 h-4" />
+                  <span className="font-semibold">{amount}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Custom Amount
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  placeholder="Enter amount"
+                  className="flex-1 input-modern text-sm"
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && e.target.value) {
+                      handleQuickAdd(null, e.target.value);
+                    }
+                  }}
+                  disabled={isQuickAdding}
+                />
+                <button
+                  onClick={(e) => {
+                    const input = e.target.previousElementSibling;
+                    if (input.value) {
+                      handleQuickAdd(null, input.value);
+                    }
+                  }}
+                  disabled={isQuickAdding}
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                >
+                  {isQuickAdding ? '...' : 'Add'}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={dismissReturnPrompt}
+                disabled={isQuickAdding}
+                className="flex-1 btn-secondary text-sm"
+              >
+                No, I didn't buy anything
+              </button>
+              <button
+                onClick={() => {
+                  dismissReturnPrompt();
+                  setShowAddForm(true);
+                }}
+                disabled={isQuickAdding}
+                className="flex-1 btn-primary text-sm"
+              >
+                Add Manually
+              </button>
+            </div>
+
+            {isQuickAdding && (
+              <div className="mt-3 flex items-center justify-center gap-2 text-sm text-emerald-600">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-emerald-600"></div>
+                Adding transaction...
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

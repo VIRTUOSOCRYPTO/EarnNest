@@ -1433,8 +1433,7 @@ async def update_user_status(request: Request, user_id: str, is_active: bool, ad
     await update_user(user_id, {"is_active": is_active})
     return {"message": f"User {'activated' if is_active else 'deactivated'} successfully"}
 
-# Include the router in the main app
-app.include_router(api_router)
+# Router will be included after all endpoints are defined
 
 # Category Suggestions and Emergency Features Routes
 @api_router.get("/category-suggestions/{category}")
@@ -1660,6 +1659,229 @@ async def get_all_category_suggestions_endpoint(request: Request, user_id: str =
     except Exception as e:
         logger.error(f"All category suggestions error: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to get all category suggestions")
+
+@api_router.get("/app-suggestions/{category}")
+@limiter.limit("30/minute")
+async def get_app_suggestions_endpoint(request: Request, category: str, user_id: str = Depends(get_current_user)):
+    """Get app/website suggestions for expense categories"""
+    try:
+        # Comprehensive app suggestions for each category
+        app_suggestions = {
+            "movies": [
+                {"name": "BookMyShow", "url": "https://bookmyshow.com", "type": "booking", "logo": "🎬", "description": "Movie tickets & events"},
+                {"name": "PVR Cinemas", "url": "https://pvrcinemas.com", "type": "booking", "logo": "🎭", "description": "Premium movie experience"},
+                {"name": "INOX Movies", "url": "https://inoxmovies.com", "type": "booking", "logo": "🍿", "description": "Latest movies & snacks"},
+                {"name": "Cinepolis", "url": "https://cinepolis.co.in", "type": "booking", "logo": "🎪", "description": "Luxury cinema experience"}
+            ],
+            "transportation": [
+                {"name": "Uber", "url": "https://uber.com", "type": "ride", "logo": "🚗", "description": "Quick rides anywhere"},
+                {"name": "Rapido", "url": "https://rapido.bike", "type": "ride", "logo": "🏍️", "description": "Bike taxis & deliveries"},
+                {"name": "Ola", "url": "https://olacabs.com", "type": "ride", "logo": "🚕", "description": "Affordable cab service"},
+                {"name": "RedBus", "url": "https://redbus.in", "type": "booking", "logo": "🚌", "description": "Bus tickets online"},
+                {"name": "Namma Yatri", "url": "https://nammayatri.in", "type": "ride", "logo": "🚖", "description": "Open mobility platform"},
+                {"name": "IRCTC", "url": "https://irctc.co.in", "type": "booking", "logo": "🚊", "description": "Train tickets & bookings"}
+            ],
+            "shopping": [
+                {"name": "Amazon", "url": "https://amazon.in", "type": "marketplace", "logo": "📦", "description": "Everything store", "price_comparison": True},
+                {"name": "Flipkart", "url": "https://flipkart.com", "type": "marketplace", "logo": "🛒", "description": "India's own store", "price_comparison": True},
+                {"name": "Meesho", "url": "https://meesho.com", "type": "marketplace", "logo": "👗", "description": "Affordable fashion", "price_comparison": True},
+                {"name": "Ajio", "url": "https://ajio.com", "type": "fashion", "logo": "👔", "description": "Fashion & lifestyle", "price_comparison": True},
+                {"name": "Myntra", "url": "https://myntra.com", "type": "fashion", "logo": "👠", "description": "Fashion & beauty", "price_comparison": True},
+                {"name": "Nykaa", "url": "https://nykaa.com", "type": "beauty", "logo": "💄", "description": "Beauty & cosmetics"}
+            ],
+            "food": [
+                {"name": "Zomato", "url": "https://zomato.com", "type": "delivery", "logo": "🍕", "description": "Food delivery & dining"},
+                {"name": "Swiggy", "url": "https://swiggy.com", "type": "delivery", "logo": "🍔", "description": "Food & grocery delivery"},
+                {"name": "Domino's", "url": "https://dominos.co.in", "type": "restaurant", "logo": "🍕", "description": "30-min pizza delivery"},
+                {"name": "McDonald's", "url": "https://mcdonalds.co.in", "type": "restaurant", "logo": "🍟", "description": "I'm lovin' it"},
+                {"name": "KFC", "url": "https://kfc.co.in", "type": "restaurant", "logo": "🍗", "description": "Finger lickin' good"},
+                {"name": "Dunzo", "url": "https://dunzo.com", "type": "delivery", "logo": "🛵", "description": "Instant delivery service"}
+            ],
+            "groceries": [
+                {"name": "Swiggy Instamart", "url": "https://swiggy.com/instamart", "type": "grocery", "logo": "🛒", "description": "10-min grocery delivery"},
+                {"name": "Blinkit", "url": "https://blinkit.com", "type": "grocery", "logo": "⚡", "description": "Instant grocery delivery"},
+                {"name": "BigBasket", "url": "https://bigbasket.com", "type": "grocery", "logo": "🥕", "description": "India's largest grocery"},
+                {"name": "Zepto", "url": "https://zepto.com", "type": "grocery", "logo": "🚀", "description": "10-minute delivery"},
+                {"name": "Amazon Fresh", "url": "https://amazon.in/fresh", "type": "grocery", "logo": "🍎", "description": "Fresh groceries online"},
+                {"name": "JioMart", "url": "https://jiomart.com", "type": "grocery", "logo": "🏪", "description": "Digital commerce platform"}
+            ],
+            "entertainment": [
+                {"name": "Netflix", "url": "https://netflix.com", "type": "streaming", "logo": "🎬", "description": "Movies & TV shows"},
+                {"name": "Amazon Prime", "url": "https://primevideo.com", "type": "streaming", "logo": "📺", "description": "Prime Video streaming"},
+                {"name": "Disney+ Hotstar", "url": "https://hotstar.com", "type": "streaming", "logo": "🏰", "description": "Sports & entertainment"},
+                {"name": "Sony LIV", "url": "https://sonyliv.com", "type": "streaming", "logo": "📱", "description": "Live TV & movies"},
+                {"name": "Zee5", "url": "https://zee5.com", "type": "streaming", "logo": "🎭", "description": "Regional content hub"},
+                {"name": "Spotify", "url": "https://spotify.com", "type": "music", "logo": "🎵", "description": "Music streaming"}
+            ],
+            "books": [
+                {"name": "Amazon Kindle", "url": "https://amazon.in/kindle", "type": "ebooks", "logo": "📚", "description": "Digital books & reading"},
+                {"name": "Audible", "url": "https://audible.in", "type": "audiobooks", "logo": "🎧", "description": "Audiobooks & podcasts"},
+                {"name": "Google Books", "url": "https://books.google.com", "type": "ebooks", "logo": "📖", "description": "Digital library"},
+                {"name": "Flipkart Books", "url": "https://flipkart.com/books", "type": "physical", "logo": "📕", "description": "Physical & digital books"},
+                {"name": "Scribd", "url": "https://scribd.com", "type": "subscription", "logo": "📄", "description": "Unlimited reading"},
+                {"name": "Byju's", "url": "https://byjus.com", "type": "educational", "logo": "🎓", "description": "Learning platform"}
+            ],
+            "rent": [
+                {"name": "PayTM", "url": "https://paytm.com", "type": "payment", "logo": "💳", "description": "Digital payments"},
+                {"name": "PhonePe", "url": "https://phonepe.com", "type": "payment", "logo": "📱", "description": "UPI payments"},
+                {"name": "Google Pay", "url": "https://pay.google.com", "type": "payment", "logo": "💰", "description": "Quick payments"},
+                {"name": "CRED", "url": "https://cred.club", "type": "bills", "logo": "💎", "description": "Credit card bills"}
+            ],
+            "utilities": [
+                {"name": "PayTM Bills", "url": "https://paytm.com/electricity-bill-payment", "type": "bills", "logo": "⚡", "description": "Utility bill payments"},
+                {"name": "PhonePe Bills", "url": "https://phonepe.com/bill-payments", "type": "bills", "logo": "🔌", "description": "All bill payments"},
+                {"name": "CRED Bills", "url": "https://cred.club", "type": "bills", "logo": "💡", "description": "Earn rewards on bills"},
+                {"name": "Freecharge", "url": "https://freecharge.in", "type": "bills", "logo": "🔋", "description": "Mobile & utility bills"}
+            ],
+            "subscriptions": [
+                {"name": "Truecaller", "url": "https://truecaller.com", "type": "utility", "logo": "📞", "description": "Premium caller ID"},
+                {"name": "Spotify Premium", "url": "https://spotify.com/premium", "type": "music", "logo": "🎵", "description": "Ad-free music"},
+                {"name": "YouTube Premium", "url": "https://youtube.com/premium", "type": "video", "logo": "📹", "description": "Ad-free videos"},
+                {"name": "Adobe Creative", "url": "https://adobe.com", "type": "creative", "logo": "🎨", "description": "Design software"},
+                {"name": "Microsoft 365", "url": "https://office.com", "type": "productivity", "logo": "💼", "description": "Office suite"}
+            ]
+        }
+        
+        category_lower = category.lower()
+        suggestions = app_suggestions.get(category_lower, [])
+        
+        if not suggestions:
+            return {"apps": [], "message": f"No specific app suggestions for {category}"}
+        
+        return {
+            "apps": suggestions,
+            "category": category,
+            "has_price_comparison": any(app.get("price_comparison", False) for app in suggestions)
+        }
+        
+    except Exception as e:
+        logger.error(f"App suggestions error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get app suggestions")
+
+@api_router.get("/emergency-types")
+@limiter.limit("20/minute") 
+async def get_emergency_types_endpoint(request: Request, user_id: str = Depends(get_current_user)):
+    """Get available emergency types for Emergency Fund category"""
+    try:
+        emergency_types = [
+            {"id": "medical", "name": "Medical Emergency", "icon": "🏥", "description": "Health issues, accidents, surgery"},
+            {"id": "family", "name": "Family Emergency", "icon": "👨‍👩‍👧‍👦", "description": "Family crisis, urgent travel"},
+            {"id": "job_loss", "name": "Job Loss", "icon": "💼", "description": "Unemployment, income loss"},
+            {"id": "education", "name": "Education Emergency", "icon": "🎓", "description": "Fees, exam expenses, course materials"},
+            {"id": "travel", "name": "Emergency Travel", "icon": "✈️", "description": "Urgent travel for family/work"},
+            {"id": "legal", "name": "Legal Emergency", "icon": "⚖️", "description": "Legal issues, court cases"},
+            {"id": "vehicle", "name": "Vehicle Emergency", "icon": "🚗", "description": "Car breakdown, accident repairs"},
+            {"id": "home", "name": "Home Emergency", "icon": "🏠", "description": "Repairs, maintenance, utilities"},
+            {"id": "technology", "name": "Technology Emergency", "icon": "💻", "description": "Device repairs, urgent tech needs"},
+            {"id": "other", "name": "Other Emergency", "icon": "🚨", "description": "Any other urgent situation"}
+        ]
+        
+        return {"emergency_types": emergency_types}
+        
+    except Exception as e:
+        logger.error(f"Emergency types error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get emergency types")
+
+@api_router.post("/emergency-hospitals")
+@limiter.limit("15/minute")
+async def get_emergency_hospitals_endpoint(
+    request: Request, 
+    location_data: dict,
+    emergency_type: str,
+    user_id: str = Depends(get_current_user)
+):
+    """Get nearby hospitals based on location and emergency type"""
+    try:
+        latitude = location_data.get("latitude")
+        longitude = location_data.get("longitude")
+        
+        if not latitude or not longitude:
+            raise HTTPException(status_code=400, detail="Location coordinates required")
+        
+        # For demo purposes, return sample hospitals with emergency type specific recommendations
+        # In production, you would integrate with Google Places API or similar service
+        
+        specialty_mapping = {
+            "medical": "Multi-specialty hospitals with emergency care",
+            "family": "General hospitals with 24/7 emergency services", 
+            "vehicle": "Trauma centers for accident victims",
+            "home": "General hospitals for injury treatment",
+            "technology": "Eye care hospitals for vision emergencies",
+            "other": "Multi-specialty emergency care centers"
+        }
+        
+        sample_hospitals = [
+            {
+                "name": "Apollo Hospital",
+                "address": "Bannerghatta Road, Bengaluru",
+                "phone": "+91-80-26304050",
+                "emergency_phone": "108",
+                "distance": "2.3 km",
+                "rating": 4.5,
+                "speciality": specialty_mapping.get(emergency_type, "General emergency care"),
+                "features": ["24/7 Emergency", "Ambulance Service", "ICU", "Trauma Care"],
+                "estimated_time": "8-12 minutes"
+            },
+            {
+                "name": "Manipal Hospital",
+                "address": "HAL Airport Road, Bengaluru", 
+                "phone": "+91-80-25024444",
+                "emergency_phone": "108",
+                "distance": "3.1 km",
+                "rating": 4.3,
+                "speciality": specialty_mapping.get(emergency_type, "Multi-specialty care"),
+                "features": ["Emergency Ward", "Cardiac Care", "Neurology", "Pediatrics"],
+                "estimated_time": "10-15 minutes"
+            },
+            {
+                "name": "Fortis Hospital",
+                "address": "Cunningham Road, Bengaluru",
+                "phone": "+91-80-66214444", 
+                "emergency_phone": "108",
+                "distance": "4.7 km",
+                "rating": 4.4,
+                "speciality": specialty_mapping.get(emergency_type, "Advanced emergency care"),
+                "features": ["Trauma Center", "Heart Institute", "Emergency Surgery", "Blood Bank"],
+                "estimated_time": "12-18 minutes"
+            },
+            {
+                "name": "Narayana Health",
+                "address": "Bommasandra, Bengaluru",
+                "phone": "+91-80-71222222",
+                "emergency_phone": "108", 
+                "distance": "5.2 km",
+                "rating": 4.2,
+                "speciality": specialty_mapping.get(emergency_type, "Affordable emergency care"),
+                "features": ["24/7 Emergency", "Ambulance", "Pharmacy", "Laboratory"],
+                "estimated_time": "15-20 minutes"
+            },
+            {
+                "name": "Sakra World Hospital", 
+                "address": "Sykes Road, Bengaluru",
+                "phone": "+91-80-46444444",
+                "emergency_phone": "108",
+                "distance": "6.8 km", 
+                "rating": 4.3,
+                "speciality": specialty_mapping.get(emergency_type, "International standard care"),
+                "features": ["Emergency Medicine", "Critical Care", "Diagnostic Center", "Rehabilitation"],
+                "estimated_time": "18-25 minutes"
+            }
+        ]
+        
+        return {
+            "hospitals": sample_hospitals,
+            "emergency_type": emergency_type,
+            "location": {"latitude": latitude, "longitude": longitude},
+            "emergency_helpline": "108",
+            "message": f"Found {len(sample_hospitals)} hospitals for {emergency_type} emergency"
+        }
+        
+    except Exception as e:
+        logger.error(f"Emergency hospitals error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get emergency hospitals")
+
+# Include the router in the main app (after all endpoints are defined)
+app.include_router(api_router)
 
 # Configure logging
 logging.basicConfig(

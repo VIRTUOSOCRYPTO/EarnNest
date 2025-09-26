@@ -9,7 +9,8 @@ import {
   ChartBarIcon, 
   ArrowRightOnRectangleIcon,
   UserCircleIcon,
-  StarIcon
+  StarIcon,
+  LightBulbIcon
 } from '@heroicons/react/24/outline';
 import { formatCurrency } from '../App';
 
@@ -25,6 +26,7 @@ const Navigation = () => {
     { path: '/goals', label: 'Goals', icon: StarIcon },
     { path: '/hustles', label: 'Side Hustles', icon: BriefcaseIcon },
     { path: '/analytics', label: 'Analytics', icon: ChartBarIcon },
+    { path: '/recommendations', label: 'Recommendations', icon: LightBulbIcon },
   ];
 
   const handleLogout = () => {

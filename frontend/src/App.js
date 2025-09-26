@@ -15,6 +15,7 @@ import Budget from './components/Budget';
 import FinancialGoals from './components/FinancialGoals';
 import Recommendations from './components/Recommendations';
 import Navigation from './components/Navigation';
+import Footer from './components/Footer';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -113,54 +114,57 @@ function App() {
   return (
     <AuthContext.Provider value={authValue}>
       <BrowserRouter>
-        <div className="App min-h-screen bg-gradient-to-br from-emerald-50 via-white to-blue-50">
+        <div className="App min-h-screen bg-gradient-to-br from-emerald-50 via-white to-blue-50 flex flex-col">
           {user && <Navigation />}
-          <Routes>
-            <Route 
-              path="/login" 
-              element={!user ? <Login /> : <Navigate to="/dashboard" />} 
-            />
-            <Route 
-              path="/register" 
-              element={!user ? <Register /> : <Navigate to="/dashboard" />} 
-            />
-            <Route 
-              path="/dashboard" 
-              element={user ? <Dashboard /> : <Navigate to="/login" />} 
-            />
-            <Route 
-              path="/transactions" 
-              element={user ? <Transaction /> : <Navigate to="/login" />} 
-            />
-            <Route 
-              path="/budget" 
-              element={user ? <Budget /> : <Navigate to="/login" />} 
-            />
-            <Route 
-              path="/goals" 
-              element={user ? <FinancialGoals /> : <Navigate to="/login" />} 
-            />
-            <Route 
-              path="/hustles" 
-              element={user ? <Hustles /> : <Navigate to="/login" />} 
-            />
-            <Route 
-              path="/analytics" 
-              element={user ? <Analytics /> : <Navigate to="/login" />} 
-            />
-            <Route 
-              path="/recommendations" 
-              element={user ? <Recommendations /> : <Navigate to="/login" />} 
-            />
-            <Route 
-              path="/profile" 
-              element={user ? <Profile /> : <Navigate to="/login" />} 
-            />
-            <Route 
-              path="/" 
-              element={<Navigate to={user ? "/dashboard" : "/login"} />} 
-            />
-          </Routes>
+          <main className="flex-grow">
+            <Routes>
+              <Route 
+                path="/login" 
+                element={!user ? <Login /> : <Navigate to="/dashboard" />} 
+              />
+              <Route 
+                path="/register" 
+                element={!user ? <Register /> : <Navigate to="/dashboard" />} 
+              />
+              <Route 
+                path="/dashboard" 
+                element={user ? <Dashboard /> : <Navigate to="/login" />} 
+              />
+              <Route 
+                path="/transactions" 
+                element={user ? <Transaction /> : <Navigate to="/login" />} 
+              />
+              <Route 
+                path="/budget" 
+                element={user ? <Budget /> : <Navigate to="/login" />} 
+              />
+              <Route 
+                path="/goals" 
+                element={user ? <FinancialGoals /> : <Navigate to="/login" />} 
+              />
+              <Route 
+                path="/hustles" 
+                element={user ? <Hustles /> : <Navigate to="/login" />} 
+              />
+              <Route 
+                path="/analytics" 
+                element={user ? <Analytics /> : <Navigate to="/login" />} 
+              />
+              <Route 
+                path="/recommendations" 
+                element={user ? <Recommendations /> : <Navigate to="/login" />} 
+              />
+              <Route 
+                path="/profile" 
+                element={user ? <Profile /> : <Navigate to="/login" />} 
+              />
+              <Route 
+                path="/" 
+                element={<Navigate to={user ? "/dashboard" : "/login"} />} 
+              />
+            </Routes>
+          </main>
+          {user && <Footer />}
         </div>
       </BrowserRouter>
     </AuthContext.Provider>

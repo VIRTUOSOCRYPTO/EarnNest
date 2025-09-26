@@ -66,13 +66,136 @@ async def init_database():
         await db.financial_goals.create_index("is_active")
         await db.financial_goals.create_index([("user_id", 1), ("category", 1)])
         
+        # Category suggestions collection indexes
+        await db.category_suggestions.create_index("category")
+        await db.category_suggestions.create_index("is_active")
+        await db.category_suggestions.create_index([("category", 1), ("priority", -1)])
+        
+        # Emergency types collection indexes
+        await db.emergency_types.create_index("name", unique=True)
+        await db.emergency_types.create_index("urgency_level")
+        
+        # Hospitals collection indexes
+        await db.hospitals.create_index("city")
+        await db.hospitals.create_index("state")
+        await db.hospitals.create_index([("latitude", 1), ("longitude", 1)])
+        await db.hospitals.create_index("rating")
+        await db.hospitals.create_index("is_emergency")
+        
+        # Click analytics collection indexes
+        await db.click_analytics.create_index("user_id")
+        await db.click_analytics.create_index("category")
+        await db.click_analytics.create_index("clicked_at")
+        await db.click_analytics.create_index([("category", 1), ("clicked_at", -1)])
+        
         logger.info("Database indexes created successfully")
         
-        # Clean up test/dummy data
-        await cleanup_test_data()
+        # Initialize seed data
+        await init_seed_data()
         
     except Exception as e:
         logger.error(f"Failed to initialize database: {str(e)}")
+
+async def init_seed_data():
+    """Initialize seed data for category suggestions and emergency data"""
+    try:
+        # Initialize Category Suggestions
+        existing_suggestions = await db.category_suggestions.count_documents({})
+        if existing_suggestions == 0:
+            category_suggestions = [
+                # Movies Category
+                {"category": "Movies", "name": "BookMyShow", "url": "https://bookmyshow.com", "type": "both", "priority": 10, "description": "Book movie tickets online", "is_active": True},
+                {"category": "Movies", "name": "PVR Cinemas", "url": "https://pvrcinemas.com", "type": "both", "priority": 9, "description": "Premium movie experience", "is_active": True},
+                {"category": "Movies", "name": "INOX Movies", "url": "https://inoxmovies.com", "type": "both", "priority": 8, "description": "Luxury cinema experience", "is_active": True},
+                
+                # Transportation Category
+                {"category": "Transportation", "name": "Uber", "url": "https://uber.com", "type": "app", "priority": 10, "description": "Ride sharing service", "is_active": True},
+                {"category": "Transportation", "name": "Ola Cabs", "url": "https://olacabs.com", "type": "app", "priority": 9, "description": "Local taxi service", "is_active": True},
+                {"category": "Transportation", "name": "Rapido", "url": "https://rapido.bike", "type": "app", "priority": 8, "description": "Bike taxi service", "is_active": True},
+                {"category": "Transportation", "name": "RedBus", "url": "https://redbus.in", "type": "both", "priority": 9, "description": "Bus booking service", "is_active": True},
+                {"category": "Transportation", "name": "Namma Yatri", "url": "https://nammayatri.in", "type": "app", "priority": 7, "description": "Open mobility platform", "is_active": True},
+                
+                # Shopping Category  
+                {"category": "Shopping", "name": "Amazon", "url": "https://amazon.in", "type": "both", "priority": 10, "description": "Online marketplace", "is_active": True},
+                {"category": "Shopping", "name": "Flipkart", "url": "https://flipkart.com", "type": "both", "priority": 9, "description": "E-commerce platform", "is_active": True},
+                {"category": "Shopping", "name": "Meesho", "url": "https://meesho.com", "type": "both", "priority": 8, "description": "Social commerce platform", "is_active": True},
+                {"category": "Shopping", "name": "Myntra", "url": "https://myntra.com", "type": "both", "priority": 8, "description": "Fashion and lifestyle", "is_active": True},
+                {"category": "Shopping", "name": "Ajio", "url": "https://ajio.com", "type": "both", "priority": 7, "description": "Fashion retailer", "is_active": True},
+                
+                # Food Category
+                {"category": "Food", "name": "Zomato", "url": "https://zomato.com", "type": "both", "priority": 10, "description": "Food delivery service", "is_active": True},
+                {"category": "Food", "name": "Swiggy", "url": "https://swiggy.com", "type": "both", "priority": 10, "description": "Food delivery platform", "is_active": True},
+                {"category": "Food", "name": "Domino's Pizza", "url": "https://dominos.co.in", "type": "both", "priority": 8, "description": "Pizza delivery", "is_active": True},
+                {"category": "Food", "name": "McDonald's", "url": "https://mcdelivery.co.in", "type": "both", "priority": 7, "description": "Fast food delivery", "is_active": True},
+                
+                # Groceries Category
+                {"category": "Groceries", "name": "Swiggy Instamart", "url": "https://swiggy.com/instamart", "type": "app", "priority": 10, "description": "Quick grocery delivery", "is_active": True},
+                {"category": "Groceries", "name": "Blinkit", "url": "https://blinkit.com", "type": "both", "priority": 10, "description": "10-minute grocery delivery", "is_active": True},
+                {"category": "Groceries", "name": "BigBasket", "url": "https://bigbasket.com", "type": "both", "priority": 9, "description": "Online grocery store", "is_active": True},
+                {"category": "Groceries", "name": "Zepto", "url": "https://zepto.co.in", "type": "app", "priority": 9, "description": "Ultra-fast grocery delivery", "is_active": True},
+                {"category": "Groceries", "name": "JioMart", "url": "https://jiomart.com", "type": "both", "priority": 8, "description": "Digital commerce platform", "is_active": True},
+                
+                # Entertainment Category
+                {"category": "Entertainment", "name": "Netflix", "url": "https://netflix.com", "type": "both", "priority": 10, "description": "Streaming service", "offers": "Various subscription plans", "is_active": True},
+                {"category": "Entertainment", "name": "Amazon Prime Video", "url": "https://primevideo.com", "type": "both", "priority": 9, "description": "Prime video streaming", "is_active": True},
+                {"category": "Entertainment", "name": "Disney+ Hotstar", "url": "https://hotstar.com", "type": "both", "priority": 9, "description": "Disney and sports content", "is_active": True},
+                {"category": "Entertainment", "name": "YouTube Premium", "url": "https://youtube.com/premium", "type": "both", "priority": 8, "description": "Ad-free YouTube experience", "is_active": True},
+                {"category": "Entertainment", "name": "SonyLIV", "url": "https://sonyliv.com", "type": "both", "priority": 7, "description": "Sony content streaming", "is_active": True},
+                
+                # Books Category
+                {"category": "Books", "name": "Amazon Kindle", "url": "https://amazon.in/kindle", "type": "both", "priority": 10, "description": "Digital books platform", "is_active": True},
+                {"category": "Books", "name": "Audible", "url": "https://audible.in", "type": "both", "priority": 9, "description": "Audiobooks service", "is_active": True},
+                {"category": "Books", "name": "Flipkart Books", "url": "https://flipkart.com/books", "type": "website", "priority": 8, "description": "Online bookstore", "is_active": True},
+                {"category": "Books", "name": "Crossword", "url": "https://crossword.in", "type": "both", "priority": 7, "description": "Book retailer", "is_active": True},
+                {"category": "Books", "name": "Storytel", "url": "https://storytel.com", "type": "app", "priority": 6, "description": "Audiobook streaming", "is_active": True},
+            ]
+            
+            await db.category_suggestions.insert_many(category_suggestions)
+            logger.info(f"Inserted {len(category_suggestions)} category suggestions")
+        
+        # Initialize Emergency Types
+        existing_emergency_types = await db.emergency_types.count_documents({})
+        if existing_emergency_types == 0:
+            emergency_types = [
+                {"name": "Medical Emergency", "icon": "🚑", "description": "Heart attack, stroke, severe injury, breathing problems", "urgency_level": "high"},
+                {"name": "Accident", "icon": "🚗", "description": "Vehicle accidents, workplace accidents, home accidents", "urgency_level": "high"},
+                {"name": "Fire Emergency", "icon": "🔥", "description": "House fire, building fire, forest fire", "urgency_level": "high"},
+                {"name": "Natural Disaster", "icon": "🌪️", "description": "Earthquake, flood, cyclone, landslide", "urgency_level": "high"},
+                {"name": "Crime/Security", "icon": "👮", "description": "Theft, assault, suspicious activity, security threat", "urgency_level": "medium"},
+                {"name": "Mental Health Crisis", "icon": "🧠", "description": "Suicide risk, severe anxiety, panic attack", "urgency_level": "high"},
+            ]
+            
+            await db.emergency_types.insert_many(emergency_types)
+            logger.info(f"Inserted {len(emergency_types)} emergency types")
+        
+        # Initialize Sample Hospital Data (Major cities)
+        existing_hospitals = await db.hospitals.count_documents({})
+        if existing_hospitals == 0:
+            sample_hospitals = [
+                # Mumbai
+                {"name": "Kokilaben Dhirubhai Ambani Hospital", "city": "Mumbai", "state": "Maharashtra", "phone": "022-42696969", "emergency_phone": "022-42696911", "latitude": 19.1334, "longitude": 72.8267, "rating": 4.5, "type": "private", "is_emergency": True, "is_24x7": True, "specialties": ["Cardiology", "Neurology", "Oncology"], "address": "Rao Saheb Achutrao Patwardhan Marg, Four Bungalows, Andheri West"},
+                {"name": "Lilavati Hospital", "city": "Mumbai", "state": "Maharashtra", "phone": "022-26567777", "emergency_phone": "022-26567911", "latitude": 19.0545, "longitude": 72.8302, "rating": 4.3, "type": "private", "is_emergency": True, "is_24x7": True, "specialties": ["Emergency Medicine", "Trauma Care"], "address": "A-791, Bandra Reclamation, Bandra West"},
+                
+                # Delhi
+                {"name": "All India Institute of Medical Sciences (AIIMS)", "city": "New Delhi", "state": "Delhi", "phone": "011-26588500", "emergency_phone": "011-26588663", "latitude": 28.5672, "longitude": 77.2100, "rating": 4.8, "type": "government", "is_emergency": True, "is_24x7": True, "specialties": ["All Specialties"], "address": "Sri Aurobindo Marg, Ansari Nagar"},
+                {"name": "Fortis Hospital Shalimar Bagh", "city": "New Delhi", "state": "Delhi", "phone": "011-47135000", "emergency_phone": "011-47135911", "latitude": 28.7196, "longitude": 77.1569, "rating": 4.2, "type": "private", "is_emergency": True, "is_24x7": True, "specialties": ["Cardiology", "Orthopedics"], "address": "AA-299, Shahpur Jat, Shalimar Bagh"},
+                
+                # Bangalore
+                {"name": "Manipal Hospital Whitefield", "city": "Bangalore", "state": "Karnataka", "phone": "080-66712000", "emergency_phone": "080-66712911", "latitude": 12.9699, "longitude": 77.7499, "rating": 4.4, "type": "private", "is_emergency": True, "is_24x7": True, "specialties": ["Emergency Care", "Critical Care"], "address": "#143, 212-2015, HRBR Layout, Kalyan Nagar, Whitefield"},
+                {"name": "Apollo Hospital Bannerghatta", "city": "Bangalore", "state": "Karnataka", "phone": "080-26304050", "emergency_phone": "080-26304911", "latitude": 12.8008, "longitude": 77.6495, "rating": 4.3, "type": "private", "is_emergency": True, "is_24x7": True, "specialties": ["Multi-specialty"], "address": "154/11, Opposite IIM-B, Bannerghatta Road"},
+                
+                # Chennai
+                {"name": "Apollo Hospital Greams Road", "city": "Chennai", "state": "Tamil Nadu", "phone": "044-28293333", "emergency_phone": "044-28293911", "latitude": 13.0661, "longitude": 80.2589, "rating": 4.5, "type": "private", "is_emergency": True, "is_24x7": True, "specialties": ["Cardiology", "Transplant"], "address": "21, Greams Lane, Off Greams Road"},
+                {"name": "Fortis Malar Hospital", "city": "Chennai", "state": "Tamil Nadu", "phone": "044-42892222", "emergency_phone": "044-42892911", "latitude": 13.0339, "longitude": 80.2403, "rating": 4.2, "type": "private", "is_emergency": True, "is_24x7": True, "specialties": ["Emergency Medicine"], "address": "52, 1st Main Road, Gandhi Nagar, Adyar"},
+            ]
+            
+            await db.hospitals.insert_many(sample_hospitals)
+            logger.info(f"Inserted {len(sample_hospitals)} sample hospitals")
+        
+        logger.info("Seed data initialization completed successfully")
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize seed data: {str(e)}")
 
 async def cleanup_test_data():
     """Remove test/dummy data from production database"""
@@ -263,3 +386,75 @@ async def delete_financial_goal(goal_id: str, user_id: str):
         {"id": goal_id, "user_id": user_id},
         {"$set": {"is_active": False}}
     )
+
+# Category Suggestions Database Functions
+async def get_category_suggestions(category: str):
+    """Get suggestions for a category"""
+    cursor = db.category_suggestions.find(
+        {"category": category, "is_active": True}
+    ).sort("priority", -1)
+    return await cursor.to_list(None)
+
+async def create_category_suggestion(suggestion_data: dict):
+    """Create category suggestion"""
+    suggestion_data["created_at"] = datetime.now(timezone.utc)
+    return await db.category_suggestions.insert_one(suggestion_data)
+
+async def get_emergency_types():
+    """Get all emergency types"""
+    cursor = db.emergency_types.find({}).sort("urgency_level", -1)
+    return await cursor.to_list(None)
+
+async def get_hospitals_by_location(city: str, state: str = None, limit: int = 10):
+    """Get hospitals by location"""
+    match_filter = {"city": {"$regex": city, "$options": "i"}}
+    if state:
+        match_filter["state"] = {"$regex": state, "$options": "i"}
+    
+    cursor = db.hospitals.find(match_filter).sort("rating", -1).limit(limit)
+    return await cursor.to_list(limit)
+
+async def get_nearby_hospitals(latitude: float, longitude: float, radius_km: float = 10, limit: int = 10):
+    """Get hospitals near coordinates using $geoNear"""
+    # Note: This requires a 2dsphere index on location field
+    # For now, we'll use a simple distance calculation
+    cursor = db.hospitals.find({
+        "latitude": {"$gte": latitude - 0.1, "$lte": latitude + 0.1},
+        "longitude": {"$gte": longitude - 0.1, "$lte": longitude + 0.1}
+    }).sort("rating", -1).limit(limit)
+    return await cursor.to_list(limit)
+
+async def create_click_analytics(analytics_data: dict):
+    """Record click analytics"""
+    analytics_data["clicked_at"] = datetime.now(timezone.utc)
+    return await db.click_analytics.insert_one(analytics_data)
+
+async def get_popular_suggestions(category: str, days: int = 30):
+    """Get popular suggestions based on click analytics"""
+    from datetime import timedelta
+    
+    start_date = datetime.now(timezone.utc) - timedelta(days=days)
+    
+    pipeline = [
+        {
+            "$match": {
+                "category": category,
+                "clicked_at": {"$gte": start_date}
+            }
+        },
+        {
+            "$group": {
+                "_id": "$suggestion_name",
+                "click_count": {"$sum": 1},
+                "suggestion_url": {"$first": "$suggestion_url"}
+            }
+        },
+        {
+            "$sort": {"click_count": -1}
+        },
+        {
+            "$limit": 10
+        }
+    ]
+    
+    return await db.click_analytics.aggregate(pipeline).to_list(10)

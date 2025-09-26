@@ -755,22 +755,6 @@ const Transactions = () => {
 
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Amount
-                  </label>
-                  <input
-                    type="number"
-                    name="amount"
-                    value={formData.amount}
-                    onChange={handleChange}
-                    className="input-modern"
-                    placeholder="0.00"
-                    step="0.01"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Category
                   </label>
                   <select
@@ -1016,6 +1000,22 @@ const Transactions = () => {
                       </div>
                     )
                   )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Amount
+                  </label>
+                  <input
+                    type="number"
+                    name="amount"
+                    value={formData.amount}
+                    onChange={handleChange}
+                    className="input-modern"
+                    placeholder="0.00"
+                    step="0.01"
+                    required
+                  />
                 </div>
 
                 <div>

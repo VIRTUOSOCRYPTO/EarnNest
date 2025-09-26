@@ -13,6 +13,7 @@ import Analytics from './components/Analytics';
 import Profile from './components/Profile';
 import Budget from './components/Budget';
 import FinancialGoals from './components/FinancialGoals';
+import Recommendations from './components/Recommendations';
 import Navigation from './components/Navigation';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -146,6 +147,10 @@ function App() {
             <Route 
               path="/analytics" 
               element={user ? <Analytics /> : <Navigate to="/login" />} 
+            />
+            <Route 
+              path="/recommendations" 
+              element={user ? <Recommendations /> : <Navigate to="/login" />} 
             />
             <Route 
               path="/profile" 

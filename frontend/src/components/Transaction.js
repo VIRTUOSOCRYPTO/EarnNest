@@ -7,7 +7,10 @@ import {
   ArrowTrendingUpIcon, 
   ArrowTrendingDownIcon,
   CalendarIcon,
-  TagIcon
+  TagIcon,
+  LinkIcon,
+  StarIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -21,6 +24,14 @@ const Transactions = () => {
   const [budgetWarning, setBudgetWarning] = useState('');
   const [budgetInfo, setBudgetInfo] = useState({});
   const [isMultiCategory, setIsMultiCategory] = useState(false);
+  const [categoryTouched, setCategoryTouched] = useState(false);
+  
+  // Category suggestions state
+  const [categorySuggestions, setCategorySuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [selectedSuggestion, setSelectedSuggestion] = useState(null);
+  
   const [formData, setFormData] = useState({
     type: 'income',
     amount: '',
@@ -47,6 +58,64 @@ const Transactions = () => {
   useEffect(() => {
     fetchTransactions();
   }, []);
+
+  // Fetch category suggestions when category is selected
+  const fetchCategorySuggestions = async (category) => {
+    if (!category || category === 'Other') return;
+    
+    // Special handling for Emergency Fund
+    if (category === 'Emergency Fund') {
+      // Show emergency types and hospital finder instead of regular suggestions
+      try {
+        const response = await axios.get(`${API}/emergency/types`);
+        // We'll handle Emergency Fund differently in the UI
+        setShowSuggestions(false);
+        setCategorySuggestions([]);
+        return;
+      } catch (error) {
+        console.error('Error fetching emergency types:', error);
+      }
+    }
+    
+    setLoadingSuggestions(true);
+    try {
+      const response = await axios.get(`${API}/category-suggestions/${category}`);
+      setCategorySuggestions(response.data.suggestions || []);
+      setShowSuggestions(true);
+    } catch (error) {
+      console.error('Error fetching category suggestions:', error);
+      setCategorySuggestions([]);
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  };
+
+  // Track suggestion click
+  const trackSuggestionClick = async (suggestion) => {
+    try {
+      await axios.post(`${API}/track-suggestion-click`, {
+        category: formData.category,
+        suggestion_name: suggestion.name,
+        suggestion_url: suggestion.url,
+        user_location: null, // Could be enhanced with user location
+        session_id: null
+      });
+    } catch (error) {
+      console.error('Error tracking suggestion click:', error);
+      // Don't show error to user for analytics
+    }
+  };
+
+  // Handle suggestion click
+  const handleSuggestionClick = async (suggestion) => {
+    await trackSuggestionClick(suggestion);
+    
+    // Store selected suggestion for display
+    setSelectedSuggestion(suggestion);
+    
+    // Open URL in new tab
+    window.open(suggestion.url, '_blank', 'noopener,noreferrer');
+  };
 
   const fetchTransactions = async () => {
     try {
@@ -188,9 +257,23 @@ const Transactions = () => {
       [name]: type === 'checkbox' ? checked : value
     }));
     
-    // Check budget when expense category is selected
-    if (name === 'category' && formData.type === 'expense' && value) {
-      checkCategoryBudget(value);
+    // Handle category selection and suggestions
+    if (name === 'category') {
+      setCategoryTouched(true);
+      setSelectedSuggestion(null);
+      
+      if (value) {
+        // Check budget for expense categories
+        if (formData.type === 'expense') {
+          checkCategoryBudget(value);
+        }
+        
+        // Fetch category suggestions
+        fetchCategorySuggestions(value);
+      } else {
+        setShowSuggestions(false);
+        setCategorySuggestions([]);
+      }
     }
   };
 
@@ -486,6 +569,108 @@ const Transactions = () => {
                         </div>
                       )}
                     </div>
+                  )}
+                  
+                  {/* Category Suggestions or Emergency Fund Special Section */}
+                  {formData.category === 'Emergency Fund' ? (
+                    /* Emergency Fund Special Section */
+                    <div className="mt-3 p-4 bg-gradient-to-r from-red-50 to-orange-50 border border-red-200 rounded-lg">
+                      <div className="flex items-center gap-2 mb-3">
+                        <ExclamationTriangleIcon className="w-4 h-4 text-red-600" />
+                        <h4 className="text-sm font-semibold text-red-800">
+                          Emergency Fund - Quick Hospital Access
+                        </h4>
+                      </div>
+                      
+                      <p className="text-sm text-gray-700 mb-3">
+                        For emergencies, you can quickly access nearby hospitals and emergency services through our Recommendations page.
+                      </p>
+                      
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => window.open('/recommendations', '_blank')}
+                          className="flex items-center gap-2 px-3 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
+                        >
+                          <LinkIcon className="w-4 h-4" />
+                          Find Hospitals
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => window.location.href = 'tel:102'}
+                          className="flex items-center gap-2 px-3 py-2 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition-colors"
+                        >
+                          📞 Emergency (102)
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Regular Category Suggestions */
+                    showSuggestions && formData.category && (
+                      <div className="mt-3 p-4 bg-gradient-to-r from-emerald-50 to-blue-50 border border-emerald-200 rounded-lg">
+                        <div className="flex items-center gap-2 mb-3">
+                          <LinkIcon className="w-4 h-4 text-emerald-600" />
+                          <h4 className="text-sm font-semibold text-emerald-800">
+                            Recommended for {formData.category}
+                          </h4>
+                        </div>
+                        
+                        {loadingSuggestions ? (
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-emerald-600"></div>
+                            Loading suggestions...
+                          </div>
+                        ) : categorySuggestions.length > 0 ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {categorySuggestions.slice(0, 6).map((suggestion, index) => (
+                              <button
+                                key={index}
+                                type="button"
+                                onClick={() => handleSuggestionClick(suggestion)}
+                                className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-emerald-300 hover:shadow-md transition-all duration-200 text-left group"
+                              >
+                                <div className="flex-shrink-0">
+                                  <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-blue-500 rounded-lg flex items-center justify-center text-white text-xs font-bold">
+                                    {suggestion.name.charAt(0)}
+                                  </div>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1">
+                                    <h5 className="font-medium text-gray-900 text-sm truncate">
+                                      {suggestion.name}
+                                    </h5>
+                                    {suggestion.is_popular && (
+                                      <StarIcon className="w-3 h-3 text-yellow-400 fill-current" />
+                                    )}
+                                  </div>
+                                  {suggestion.description && (
+                                    <p className="text-xs text-gray-500 truncate">
+                                      {suggestion.description}
+                                    </p>
+                                  )}
+                                  {suggestion.offers && (
+                                    <p className="text-xs text-emerald-600 font-medium">
+                                      {suggestion.offers}
+                                    </p>
+                                  )}
+                                </div>
+                                <LinkIcon className="w-4 h-4 text-gray-400 group-hover:text-emerald-600 transition-colors" />
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-600">No suggestions available for this category.</p>
+                        )}
+                        
+                        {selectedSuggestion && (
+                          <div className="mt-3 p-2 bg-emerald-100 rounded-lg">
+                            <p className="text-xs text-emerald-700">
+                              ✓ Opened {selectedSuggestion.name} in new tab
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )
                   )}
                 </div>
 

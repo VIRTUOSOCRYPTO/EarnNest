@@ -276,6 +276,9 @@ const Transactions = () => {
   const handleQuickAdd = async (amount, customAmount = null) => {
     setIsQuickAdding(true);
     
+    // Close modal immediately for better UX
+    setShowReturnPrompt(false);
+    
     try {
       const finalAmount = customAmount || amount;
       const transactionData = {
@@ -291,21 +294,46 @@ const Transactions = () => {
       const error = await validateExpenseBudget(quickAddData.category, parseFloat(finalAmount));
       if (error) {
         alert(error);
+        // Clean up session data even on error
+        sessionStorage.removeItem('earnest_app_visit');
+        sessionStorage.removeItem('earnest_prompt_shown');
         return;
       }
 
       await axios.post(`${API}/transactions`, transactionData);
       
-      // Success feedback
-      setShowReturnPrompt(false);
+      // Clean up session data
       sessionStorage.removeItem('earnest_app_visit');
       sessionStorage.removeItem('earnest_prompt_shown');
       
-      // Refresh transactions
+      // Close the Add Transaction modal and redirect to transactions list
+      setShowAddForm(false);
+      
+      // Refresh transactions to show the new entry
       fetchTransactions();
       
-      // Show success message
-      alert(`✅ Transaction added successfully! ₹${finalAmount} spent at ${quickAddData.merchant}`);
+      // Show subtle success notification instead of alert
+      const successMessage = document.createElement('div');
+      successMessage.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transform transition-all duration-300';
+      successMessage.innerHTML = `
+        <div class="flex items-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+          </svg>
+          <span>₹${finalAmount} transaction added successfully!</span>
+        </div>
+      `;
+      document.body.appendChild(successMessage);
+      
+      // Remove notification after 3 seconds
+      setTimeout(() => {
+        successMessage.style.transform = 'translateX(100%)';
+        setTimeout(() => {
+          if (successMessage.parentNode) {
+            successMessage.parentNode.removeChild(successMessage);
+          }
+        }, 300);
+      }, 3000);
       
     } catch (error) {
       console.error('Error creating quick transaction:', error);
@@ -314,6 +342,10 @@ const Transactions = () => {
       } else {
         alert('Failed to create transaction. Please try again.');
       }
+      
+      // Clean up session data on error too
+      sessionStorage.removeItem('earnest_app_visit');
+      sessionStorage.removeItem('earnest_prompt_shown');
     } finally {
       setIsQuickAdding(false);
     }

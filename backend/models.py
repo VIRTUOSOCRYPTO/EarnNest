@@ -767,3 +767,64 @@ class FinancialGoalUpdate(BaseModel):
                 raise ValueError('Goal name must be less than 100 characters')
             return v.strip()
         return v
+
+# Category Suggestions Models
+class CategorySuggestion(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    category: str
+    name: str
+    url: str
+    logo_url: Optional[str] = None
+    description: Optional[str] = None
+    rating: Optional[float] = None
+    offers: Optional[str] = None
+    cashback: Optional[str] = None
+    type: str  # "app", "website", "both"
+    is_active: bool = True
+    priority: int = 0  # Higher number = higher priority
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class EmergencyType(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    icon: str
+    description: str
+    urgency_level: str  # "high", "medium", "low"
+
+class Hospital(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    address: str
+    city: str
+    state: str
+    phone: str
+    emergency_phone: Optional[str] = None
+    latitude: float
+    longitude: float
+    rating: Optional[float] = None
+    specialties: List[str] = []
+    is_emergency: bool = True
+    is_24x7: bool = True
+    type: str  # "government", "private", "clinic"
+
+class ClickAnalytics(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    category: str
+    suggestion_name: str
+    suggestion_url: str
+    clicked_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    user_location: Optional[str] = None
+    session_id: Optional[str] = None
+
+class ClickAnalyticsCreate(BaseModel):
+    category: str
+    suggestion_name: str
+    suggestion_url: str
+    user_location: Optional[str] = None
+    session_id: Optional[str] = None
+
+class PriceComparisonQuery(BaseModel):
+    product_name: str
+    category: str = "Shopping"
+    budget_range: Optional[str] = None  # "under_1000", "1000_5000", "5000_above"

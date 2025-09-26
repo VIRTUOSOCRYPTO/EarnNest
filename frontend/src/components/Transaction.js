@@ -26,11 +26,15 @@ const Transactions = () => {
   const [isMultiCategory, setIsMultiCategory] = useState(false);
   const [categoryTouched, setCategoryTouched] = useState(false);
   
-  // Category suggestions state
-  const [categorySuggestions, setCategorySuggestions] = useState([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
-  const [selectedSuggestion, setSelectedSuggestion] = useState(null);
+  // App suggestions state
+  const [appSuggestions, setAppSuggestions] = useState([]);
+  const [showAppSuggestions, setShowAppSuggestions] = useState(false);
+  const [loadingAppSuggestions, setLoadingAppSuggestions] = useState(false);
+  const [emergencyTypes, setEmergencyTypes] = useState([]);
+  const [selectedEmergencyType, setSelectedEmergencyType] = useState('');
+  const [showHospitals, setShowHospitals] = useState(false);
+  const [nearbyHospitals, setNearbyHospitals] = useState([]);
+  const [userLocation, setUserLocation] = useState(null);
   
   const [formData, setFormData] = useState({
     type: 'income',
@@ -59,62 +63,94 @@ const Transactions = () => {
     fetchTransactions();
   }, []);
 
-  // Fetch category suggestions when category is selected
-  const fetchCategorySuggestions = async (category) => {
-    if (!category || category === 'Other') return;
+  // Fetch app suggestions when category is selected
+  const fetchAppSuggestions = async (category) => {
+    if (!category || category === 'Other') {
+      setShowAppSuggestions(false);
+      setAppSuggestions([]);
+      return;
+    }
     
     // Special handling for Emergency Fund
     if (category === 'Emergency Fund') {
-      // Show emergency types and hospital finder instead of regular suggestions
       try {
-        const response = await axios.get(`${API}/emergency/types`);
-        // We'll handle Emergency Fund differently in the UI
-        setShowSuggestions(false);
-        setCategorySuggestions([]);
+        const response = await axios.get(`${API}/emergency-types`);
+        setEmergencyTypes(response.data.emergency_types || []);
+        setShowAppSuggestions(false);
+        setAppSuggestions([]);
         return;
       } catch (error) {
         console.error('Error fetching emergency types:', error);
+        setEmergencyTypes([]);
+      }
+      return;
+    }
+    
+    setLoadingAppSuggestions(true);
+    try {
+      const response = await axios.get(`${API}/app-suggestions/${category}`);
+      setAppSuggestions(response.data.apps || []);
+      setShowAppSuggestions(response.data.apps && response.data.apps.length > 0);
+    } catch (error) {
+      console.error('Error fetching app suggestions:', error);
+      setAppSuggestions([]);
+      setShowAppSuggestions(false);
+    } finally {
+      setLoadingAppSuggestions(false);
+    }
+  };
+
+  // Get user location for emergency hospitals
+  const getUserLocation = () => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error('Geolocation is not supported'));
+        return;
+      }
+      
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const location = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          };
+          setUserLocation(location);
+          resolve(location);
+        },
+        (error) => {
+          console.error('Error getting location:', error);
+          reject(error);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+      );
+    });
+  };
+
+  // Fetch nearby hospitals for emergency
+  const fetchNearbyHospitals = async (emergencyType) => {
+    try {
+      const location = await getUserLocation();
+      
+      const response = await axios.post(`${API}/emergency-hospitals`, location, {
+        params: { emergency_type: emergencyType }
+      });
+      
+      setNearbyHospitals(response.data.hospitals || []);
+      setShowHospitals(true);
+    } catch (error) {
+      console.error('Error fetching hospitals:', error);
+      if (error.message.includes('Geolocation')) {
+        alert('Please enable location access to find nearby hospitals');
+      } else {
+        alert('Failed to fetch nearby hospitals. Please try again.');
       }
     }
-    
-    setLoadingSuggestions(true);
-    try {
-      const response = await axios.get(`${API}/category-suggestions/${category}`);
-      setCategorySuggestions(response.data.suggestions || []);
-      setShowSuggestions(true);
-    } catch (error) {
-      console.error('Error fetching category suggestions:', error);
-      setCategorySuggestions([]);
-    } finally {
-      setLoadingSuggestions(false);
-    }
   };
 
-  // Track suggestion click
-  const trackSuggestionClick = async (suggestion) => {
-    try {
-      await axios.post(`${API}/track-suggestion-click`, {
-        category: formData.category,
-        suggestion_name: suggestion.name,
-        suggestion_url: suggestion.url,
-        user_location: null, // Could be enhanced with user location
-        session_id: null
-      });
-    } catch (error) {
-      console.error('Error tracking suggestion click:', error);
-      // Don't show error to user for analytics
-    }
-  };
-
-  // Handle suggestion click
-  const handleSuggestionClick = async (suggestion) => {
-    await trackSuggestionClick(suggestion);
-    
-    // Store selected suggestion for display
-    setSelectedSuggestion(suggestion);
-    
+  // Handle app suggestion click
+  const handleAppSuggestionClick = (app) => {
     // Open URL in new tab
-    window.open(suggestion.url, '_blank', 'noopener,noreferrer');
+    window.open(app.url, '_blank', 'noopener,noreferrer');
   };
 
   const fetchTransactions = async () => {
@@ -260,7 +296,13 @@ const Transactions = () => {
     // Handle category selection and suggestions
     if (name === 'category') {
       setCategoryTouched(true);
-      setSelectedSuggestion(null);
+      
+      // Reset all suggestion states
+      setShowAppSuggestions(false);
+      setAppSuggestions([]);
+      setSelectedEmergencyType('');
+      setShowHospitals(false);
+      setNearbyHospitals([]);
       
       if (value) {
         // Check budget for expense categories
@@ -268,11 +310,8 @@ const Transactions = () => {
           checkCategoryBudget(value);
         }
         
-        // Fetch category suggestions
-        fetchCategorySuggestions(value);
-      } else {
-        setShowSuggestions(false);
-        setCategorySuggestions([]);
+        // Fetch app suggestions
+        fetchAppSuggestions(value);
       }
     }
   };
@@ -571,101 +610,190 @@ const Transactions = () => {
                     </div>
                   )}
                   
-                  {/* Category Suggestions or Emergency Fund Special Section */}
+                  {/* Enhanced App Suggestions or Emergency Fund Special Section */}
                   {formData.category === 'Emergency Fund' ? (
                     /* Emergency Fund Special Section */
                     <div className="mt-3 p-4 bg-gradient-to-r from-red-50 to-orange-50 border border-red-200 rounded-lg">
                       <div className="flex items-center gap-2 mb-3">
                         <ExclamationTriangleIcon className="w-4 h-4 text-red-600" />
                         <h4 className="text-sm font-semibold text-red-800">
-                          Emergency Fund - Quick Hospital Access
+                          Emergency Fund - Get Immediate Help
                         </h4>
                       </div>
                       
-                      <p className="text-sm text-gray-700 mb-3">
-                        For emergencies, you can quickly access nearby hospitals and emergency services through our Recommendations page.
-                      </p>
-                      
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => window.open('/recommendations', '_blank')}
-                          className="flex items-center gap-2 px-3 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
-                        >
-                          <LinkIcon className="w-4 h-4" />
-                          Find Hospitals
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => window.location.href = 'tel:102'}
-                          className="flex items-center gap-2 px-3 py-2 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition-colors"
-                        >
-                          📞 Emergency (102)
-                        </button>
-                      </div>
+                      {!selectedEmergencyType ? (
+                        <div>
+                          <p className="text-sm text-gray-700 mb-3">
+                            What type of emergency are you facing? We'll help you find the right assistance.
+                          </p>
+                          
+                          <div className="grid grid-cols-2 gap-2 mb-3">
+                            {emergencyTypes.map((type) => (
+                              <button
+                                key={type.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedEmergencyType(type.id);
+                                  if (type.id === 'medical') {
+                                    fetchNearbyHospitals(type.id);
+                                  }
+                                }}
+                                className="flex items-center gap-2 p-2 bg-white border border-gray-200 rounded-lg hover:border-red-300 hover:bg-red-50 transition-all text-left"
+                              >
+                                <span className="text-lg">{type.icon}</span>
+                                <div className="flex-1">
+                                  <div className="text-sm font-medium text-gray-900">{type.name}</div>
+                                  <div className="text-xs text-gray-500">{type.description}</div>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                          
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => window.location.href = 'tel:108'}
+                              className="flex items-center gap-2 px-3 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
+                            >
+                              🚨 Emergency (108)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => window.location.href = 'tel:102'}
+                              className="flex items-center gap-2 px-3 py-2 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition-colors"
+                            >
+                              👮 Police (102)
+                            </button>
+                          </div>
+                        </div>
+                      ) : showHospitals && nearbyHospitals.length > 0 ? (
+                        <div>
+                          <div className="flex items-center justify-between mb-3">
+                            <h5 className="text-sm font-semibold text-red-800">Nearby Hospitals</h5>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedEmergencyType('');
+                                setShowHospitals(false);
+                                setNearbyHospitals([]);
+                              }}
+                              className="text-xs text-red-600 hover:text-red-800"
+                            >
+                              ← Back
+                            </button>
+                          </div>
+                          
+                          <div className="space-y-2 max-h-64 overflow-y-auto">
+                            {nearbyHospitals.slice(0, 3).map((hospital, index) => (
+                              <div key={index} className="p-3 bg-white rounded-lg border border-gray-200">
+                                <div className="flex items-start justify-between mb-2">
+                                  <h6 className="font-semibold text-sm text-gray-900">{hospital.name}</h6>
+                                  <span className="text-xs text-gray-500">{hospital.distance}</span>
+                                </div>
+                                <p className="text-xs text-gray-600 mb-2">{hospital.address}</p>
+                                <p className="text-xs text-blue-600 mb-2">{hospital.speciality}</p>
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => window.location.href = `tel:${hospital.phone}`}
+                                    className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                                  >
+                                    📞 Call
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => window.location.href = `tel:${hospital.emergency_phone}`}
+                                    className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
+                                  >
+                                    🚨 Emergency
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : selectedEmergencyType ? (
+                        <div>
+                          <p className="text-sm text-red-700 mb-2">
+                            Getting help for {emergencyTypes.find(t => t.id === selectedEmergencyType)?.name}...
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedEmergencyType('');
+                              setShowHospitals(false);
+                            }}
+                            className="text-xs text-red-600 hover:text-red-800"
+                          >
+                            ← Back to emergency types
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                   ) : (
-                    /* Regular Category Suggestions */
-                    showSuggestions && formData.category && (
-                      <div className="mt-3 p-4 bg-gradient-to-r from-emerald-50 to-blue-50 border border-emerald-200 rounded-lg">
+                    /* Enhanced App Suggestions */
+                    showAppSuggestions && formData.category && (
+                      <div className="mt-3 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
                         <div className="flex items-center gap-2 mb-3">
-                          <LinkIcon className="w-4 h-4 text-emerald-600" />
-                          <h4 className="text-sm font-semibold text-emerald-800">
-                            Recommended for {formData.category}
+                          <LinkIcon className="w-4 h-4 text-blue-600" />
+                          <h4 className="text-sm font-semibold text-blue-800">
+                            Recommended Apps & Websites for {formData.category}
                           </h4>
                         </div>
                         
-                        {loadingSuggestions ? (
+                        {loadingAppSuggestions ? (
                           <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-emerald-600"></div>
-                            Loading suggestions...
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                            Loading app suggestions...
                           </div>
-                        ) : categorySuggestions.length > 0 ? (
+                        ) : appSuggestions.length > 0 ? (
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {categorySuggestions.slice(0, 6).map((suggestion, index) => (
+                            {appSuggestions.slice(0, 6).map((app, index) => (
                               <button
                                 key={index}
                                 type="button"
-                                onClick={() => handleSuggestionClick(suggestion)}
-                                className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-emerald-300 hover:shadow-md transition-all duration-200 text-left group"
+                                onClick={() => handleAppSuggestionClick(app)}
+                                className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all duration-200 text-left group"
                               >
                                 <div className="flex-shrink-0">
-                                  <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-blue-500 rounded-lg flex items-center justify-center text-white text-xs font-bold">
-                                    {suggestion.name.charAt(0)}
+                                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center text-white text-sm">
+                                    {app.logo}
                                   </div>
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-1">
                                     <h5 className="font-medium text-gray-900 text-sm truncate">
-                                      {suggestion.name}
+                                      {app.name}
                                     </h5>
-                                    {suggestion.is_popular && (
-                                      <StarIcon className="w-3 h-3 text-yellow-400 fill-current" />
+                                    {app.price_comparison && (
+                                      <span className="bg-orange-100 text-orange-600 text-xs px-1 rounded">💰</span>
                                     )}
                                   </div>
-                                  {suggestion.description && (
+                                  {app.description && (
                                     <p className="text-xs text-gray-500 truncate">
-                                      {suggestion.description}
+                                      {app.description}
                                     </p>
                                   )}
-                                  {suggestion.offers && (
-                                    <p className="text-xs text-emerald-600 font-medium">
-                                      {suggestion.offers}
-                                    </p>
-                                  )}
+                                  <div className="text-xs text-blue-600 capitalize">
+                                    {app.type}
+                                  </div>
                                 </div>
-                                <LinkIcon className="w-4 h-4 text-gray-400 group-hover:text-emerald-600 transition-colors" />
+                                <LinkIcon className="w-4 h-4 text-gray-400 group-hover:text-blue-600 transition-colors" />
                               </button>
                             ))}
                           </div>
                         ) : (
-                          <p className="text-sm text-gray-600">No suggestions available for this category.</p>
+                          <p className="text-sm text-gray-600">No app suggestions available for this category.</p>
                         )}
                         
-                        {selectedSuggestion && (
-                          <div className="mt-3 p-2 bg-emerald-100 rounded-lg">
-                            <p className="text-xs text-emerald-700">
-                              ✓ Opened {selectedSuggestion.name} in new tab
+                        {formData.category.toLowerCase() === 'shopping' && appSuggestions.some(app => app.price_comparison) && (
+                          <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-orange-600">💰</span>
+                              <h6 className="text-sm font-semibold text-orange-800">Price Comparison Tips</h6>
+                            </div>
+                            <p className="text-xs text-orange-700">
+                              Compare prices across multiple apps to get the best deals. Check for coupons and cashback offers!
                             </p>
                           </div>
                         )}

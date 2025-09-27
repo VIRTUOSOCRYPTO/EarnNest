@@ -959,18 +959,25 @@ const Transactions = () => {
                               >
                                 <div className="flex-shrink-0">
                                   <div className="w-8 h-8 bg-white rounded-lg border border-gray-200 flex items-center justify-center p-1">
-                                    <img 
-                                      src={app.logo} 
-                                      alt={`${app.name} logo`}
-                                      className="w-full h-full object-contain"
-                                      onError={(e) => {
-                                        e.target.style.display = 'none';
-                                        e.target.nextSibling.style.display = 'flex';
-                                      }}
-                                    />
-                                    <div className="w-full h-full bg-gradient-to-br from-blue-500 to-indigo-500 rounded flex items-center justify-center text-white text-xs font-semibold" style={{display: 'none'}}>
-                                      {app.name.charAt(0)}
-                                    </div>
+                                    {app.logo ? (
+                                      <img 
+                                        src={app.logo} 
+                                        alt={`${app.name} logo`}
+                                        className="w-full h-full object-contain"
+                                        onError={(e) => {
+                                          e.target.parentElement.innerHTML = `<div class="w-full h-full bg-gradient-to-br from-blue-500 to-indigo-500 rounded flex items-center justify-center text-white text-xs font-semibold">${app.name.charAt(0)}</div>`;
+                                        }}
+                                        onLoad={(e) => {
+                                          if (e.target.naturalWidth === 0) {
+                                            e.target.parentElement.innerHTML = `<div class="w-full h-full bg-gradient-to-br from-blue-500 to-indigo-500 rounded flex items-center justify-center text-white text-xs font-semibold">${app.name.charAt(0)}</div>`;
+                                          }
+                                        }}
+                                      />
+                                    ) : (
+                                      <div className="w-full h-full bg-gradient-to-br from-blue-500 to-indigo-500 rounded flex items-center justify-center text-white text-xs font-semibold">
+                                        {app.name.charAt(0)}
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                                 <div className="flex-1 min-w-0">

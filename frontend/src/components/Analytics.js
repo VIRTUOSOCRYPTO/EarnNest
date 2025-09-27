@@ -312,7 +312,7 @@ const Analytics = () => {
           <h2 className="text-xl font-bold text-gray-900">Financial Goals</h2>
           <button
             onClick={() => setEditingGoal('new')}
-            className="flex items-center px-4 py-2 bg-green-100 text-white rounded-lg hover:bg-green-200 transition-colors"
+            className="flex items-center px-4 py-2 btn-primary text-white rounded-lg transition-colors"
           >
             <PlusIcon className="w-4 h-4 mr-2" />
             Add Goal
@@ -326,7 +326,7 @@ const Analytics = () => {
             <p className="text-gray-600 mb-4">Start by creating your first financial goal to track your progress.</p>
             <button
               onClick={() => setEditingGoal('new')}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="px-6 py-2 btn-primary text-white rounded-lg transition-colors"
             >
               Create Your First Goal
             </button>

@@ -26,7 +26,8 @@ const Register = () => {
     skills: [],  // Changed to array for better handling
     availability_hours: 10,
     location: '', // MANDATORY - will be required
-    bio: ''
+    bio: '',
+    avatar: 'boy' // MANDATORY - default avatar
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -601,6 +602,39 @@ const Register = () => {
               )}
             </div>
 
+            {/* Avatar Selection */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Avatar *
+              </label>
+              <div className="grid grid-cols-3 gap-3">
+                {['boy', 'man', 'girl', 'woman', 'grandfather', 'grandmother'].map((avatarOption) => (
+                  <button
+                    key={avatarOption}
+                    type="button"
+                    onClick={() => setFormData({...formData, avatar: avatarOption})}
+                    className={`p-3 rounded-lg border-2 text-center transition-colors ${
+                      formData.avatar === avatarOption 
+                        ? 'border-emerald-500 bg-emerald-50 text-emerald-700' 
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="text-2xl mb-1">
+                      {avatarOption === 'boy' && '👦'}
+                      {avatarOption === 'man' && '👨'}
+                      {avatarOption === 'girl' && '👧'}
+                      {avatarOption === 'woman' && '👩'}
+                      {avatarOption === 'grandfather' && '👴'}
+                      {avatarOption === 'grandmother' && '👵'}
+                    </div>
+                    <div className="text-sm font-medium capitalize">
+                      {avatarOption}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Bio
@@ -627,7 +661,8 @@ const Register = () => {
                 passwordStrength.score < 40 || 
                 !formData.role || 
                 !formData.location.trim() ||
-                formData.skills.length === 0  // Add skills validation
+                formData.skills.length === 0 ||  // Add skills validation
+                !formData.avatar  // Add avatar validation
               }
               className="btn-primary w-full flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
             >

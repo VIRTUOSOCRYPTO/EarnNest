@@ -1668,77 +1668,77 @@ async def get_app_suggestions_endpoint(request: Request, category: str, user_id:
         # Comprehensive app suggestions for each category
         app_suggestions = {
             "movies": [
-                {"name": "BookMyShow", "url": "https://bookmyshow.com", "type": "booking", "logo": "🎬", "description": "Movie tickets & events"},
-                {"name": "PVR Cinemas", "url": "https://pvrcinemas.com", "type": "booking", "logo": "🎭", "description": "Premium movie experience"},
-                {"name": "INOX Movies", "url": "https://inoxmovies.com", "type": "booking", "logo": "🍿", "description": "Latest movies & snacks"},
-                {"name": "Cinepolis", "url": "https://cinepolis.co.in", "type": "booking", "logo": "🎪", "description": "Luxury cinema experience"}
+                {"name": "BookMyShow", "url": "https://bookmyshow.com", "type": "booking", "logo": "https://upload.wikimedia.org/wikipedia/commons/6/67/BookMyShow_Logo.svg", "description": "Movie tickets & events"},
+                {"name": "PVR Cinemas", "url": "https://pvrcinemas.com", "type": "booking", "logo": "https://upload.wikimedia.org/wikipedia/commons/d/d3/PVR_Cinemas.svg", "description": "Premium movie experience"},
+                {"name": "INOX Movies", "url": "https://inoxmovies.com", "type": "booking", "logo": "https://seeklogo.com/images/I/inox-movies-logo-B8B684C116-seeklogo.com.png", "description": "Latest movies & snacks"},
+                {"name": "Cinepolis", "url": "https://cinepolis.co.in", "type": "booking", "logo": "https://seeklogo.com/images/C/cinepolis-logo-5B9DB8A8E4-seeklogo.com.png", "description": "Luxury cinema experience"}
             ],
             "transportation": [
-                {"name": "Uber", "url": "https://uber.com", "type": "ride", "logo": "🚗", "description": "Quick rides anywhere"},
-                {"name": "Rapido", "url": "https://rapido.bike", "type": "ride", "logo": "🏍️", "description": "Bike taxis & deliveries"},
-                {"name": "Ola", "url": "https://olacabs.com", "type": "ride", "logo": "🚕", "description": "Affordable cab service"},
-                {"name": "RedBus", "url": "https://redbus.in", "type": "booking", "logo": "🚌", "description": "Bus tickets online"},
-                {"name": "Namma Yatri", "url": "https://nammayatri.in", "type": "ride", "logo": "🚖", "description": "Open mobility platform"},
-                {"name": "IRCTC", "url": "https://irctc.co.in", "type": "booking", "logo": "🚊", "description": "Train tickets & bookings"}
+                {"name": "Uber", "url": "https://uber.com", "type": "ride", "logo": "https://upload.wikimedia.org/wikipedia/commons/c/cc/Uber_logo_2018.png", "description": "Quick rides anywhere"},
+                {"name": "Rapido", "url": "https://rapido.bike", "type": "ride", "logo": "https://seeklogo.com/images/R/rapido-logo-B9C7684FF5-seeklogo.com.png", "description": "Bike taxis & deliveries"},
+                {"name": "Ola", "url": "https://olacabs.com", "type": "ride", "logo": "https://upload.wikimedia.org/wikipedia/commons/2/29/Ola_Cabs_logo.png", "description": "Affordable cab service"},
+                {"name": "RedBus", "url": "https://redbus.in", "type": "booking", "logo": "https://upload.wikimedia.org/wikipedia/commons/d/d5/RedBus_logo.svg", "description": "Bus tickets online"},
+                {"name": "Namma Yatri", "url": "https://nammayatri.in", "type": "ride", "logo": "https://seeklogo.com/images/N/namma-yatri-logo-7F7F0B8F7C-seeklogo.com.png", "description": "Open mobility platform"},
+                {"name": "IRCTC", "url": "https://irctc.co.in", "type": "booking", "logo": "https://upload.wikimedia.org/wikipedia/commons/4/4e/Indian_Railway_main_logo.svg", "description": "Train tickets & bookings"}
             ],
             "shopping": [
-                {"name": "Amazon", "url": "https://amazon.in", "type": "marketplace", "logo": "📦", "description": "Everything store", "price_comparison": True},
-                {"name": "Flipkart", "url": "https://flipkart.com", "type": "marketplace", "logo": "🛒", "description": "India's own store", "price_comparison": True},
-                {"name": "Meesho", "url": "https://meesho.com", "type": "marketplace", "logo": "👗", "description": "Affordable fashion", "price_comparison": True},
-                {"name": "Ajio", "url": "https://ajio.com", "type": "fashion", "logo": "👔", "description": "Fashion & lifestyle", "price_comparison": True},
-                {"name": "Myntra", "url": "https://myntra.com", "type": "fashion", "logo": "👠", "description": "Fashion & beauty", "price_comparison": True},
-                {"name": "Nykaa", "url": "https://nykaa.com", "type": "beauty", "logo": "💄", "description": "Beauty & cosmetics"}
+                {"name": "Amazon", "url": "https://amazon.in", "type": "marketplace", "logo": "https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg", "description": "Everything store", "price_comparison": True},
+                {"name": "Flipkart", "url": "https://flipkart.com", "type": "marketplace", "logo": "https://upload.wikimedia.org/wikipedia/en/7/7a/Flipkart_logo.svg", "description": "India's own store", "price_comparison": True},
+                {"name": "Meesho", "url": "https://meesho.com", "type": "marketplace", "logo": "https://seeklogo.com/images/M/meesho-logo-802BF8B7C7-seeklogo.com.png", "description": "Affordable fashion", "price_comparison": True},
+                {"name": "Ajio", "url": "https://ajio.com", "type": "fashion", "logo": "https://seeklogo.com/images/A/ajio-logo-28C0C75C20-seeklogo.com.png", "description": "Fashion & lifestyle", "price_comparison": True},
+                {"name": "Myntra", "url": "https://myntra.com", "type": "fashion", "logo": "https://upload.wikimedia.org/wikipedia/commons/b/ba/Myntra_logo.svg", "description": "Fashion & beauty", "price_comparison": True},
+                {"name": "Nykaa", "url": "https://nykaa.com", "type": "beauty", "logo": "https://seeklogo.com/images/N/nykaa-logo-F1F0F2E7C5-seeklogo.com.png", "description": "Beauty & cosmetics"}
             ],
             "food": [
-                {"name": "Zomato", "url": "https://zomato.com", "type": "delivery", "logo": "🍕", "description": "Food delivery & dining"},
-                {"name": "Swiggy", "url": "https://swiggy.com", "type": "delivery", "logo": "🍔", "description": "Food & grocery delivery"},
-                {"name": "Domino's", "url": "https://dominos.co.in", "type": "restaurant", "logo": "🍕", "description": "30-min pizza delivery"},
-                {"name": "McDonald's", "url": "https://mcdonalds.co.in", "type": "restaurant", "logo": "🍟", "description": "I'm lovin' it"},
-                {"name": "KFC", "url": "https://kfc.co.in", "type": "restaurant", "logo": "🍗", "description": "Finger lickin' good"},
-                {"name": "Dunzo", "url": "https://dunzo.com", "type": "delivery", "logo": "🛵", "description": "Instant delivery service"}
+                {"name": "Zomato", "url": "https://zomato.com", "type": "delivery", "logo": "https://upload.wikimedia.org/wikipedia/commons/7/75/Zomato_logo.png", "description": "Food delivery & dining"},
+                {"name": "Swiggy", "url": "https://swiggy.com", "type": "delivery", "logo": "https://upload.wikimedia.org/wikipedia/en/1/12/Swiggy_logo.svg", "description": "Food & grocery delivery"},
+                {"name": "Domino's", "url": "https://dominos.co.in", "type": "restaurant", "logo": "https://upload.wikimedia.org/wikipedia/commons/7/74/Dominos_pizza_logo.svg", "description": "30-min pizza delivery"},
+                {"name": "McDonald's", "url": "https://mcdonalds.co.in", "type": "restaurant", "logo": "https://upload.wikimedia.org/wikipedia/commons/3/36/McDonald%27s_Golden_Arches.svg", "description": "I'm lovin' it"},
+                {"name": "KFC", "url": "https://kfc.co.in", "type": "restaurant", "logo": "https://upload.wikimedia.org/wikipedia/sco/b/bf/KFC_logo.svg", "description": "Finger lickin' good"},
+                {"name": "Dunzo", "url": "https://dunzo.com", "type": "delivery", "logo": "https://seeklogo.com/images/D/dunzo-logo-66E5BAE1E1-seeklogo.com.png", "description": "Instant delivery service"}
             ],
             "groceries": [
-                {"name": "Swiggy Instamart", "url": "https://swiggy.com/instamart", "type": "grocery", "logo": "🛒", "description": "10-min grocery delivery"},
-                {"name": "Blinkit", "url": "https://blinkit.com", "type": "grocery", "logo": "⚡", "description": "Instant grocery delivery"},
-                {"name": "BigBasket", "url": "https://bigbasket.com", "type": "grocery", "logo": "🥕", "description": "India's largest grocery"},
-                {"name": "Zepto", "url": "https://zepto.com", "type": "grocery", "logo": "🚀", "description": "10-minute delivery"},
-                {"name": "Amazon Fresh", "url": "https://amazon.in/fresh", "type": "grocery", "logo": "🍎", "description": "Fresh groceries online"},
-                {"name": "JioMart", "url": "https://jiomart.com", "type": "grocery", "logo": "🏪", "description": "Digital commerce platform"}
+                {"name": "Swiggy Instamart", "url": "https://swiggy.com/instamart", "type": "grocery", "logo": "https://seeklogo.com/images/S/swiggy-instamart-logo-D00D8A97B4-seeklogo.com.png", "description": "10-min grocery delivery"},
+                {"name": "Blinkit", "url": "https://blinkit.com", "type": "grocery", "logo": "https://seeklogo.com/images/B/blinkit-logo-568D32C8EC-seeklogo.com.png", "description": "Instant grocery delivery"},
+                {"name": "BigBasket", "url": "https://bigbasket.com", "type": "grocery", "logo": "https://upload.wikimedia.org/wikipedia/commons/1/1f/BigBasket_logo.svg", "description": "India's largest grocery"},
+                {"name": "Zepto", "url": "https://zepto.com", "type": "grocery", "logo": "https://seeklogo.com/images/Z/zepto-logo-BAE57C8CF6-seeklogo.com.png", "description": "10-minute delivery"},
+                {"name": "Amazon Fresh", "url": "https://amazon.in/fresh", "type": "grocery", "logo": "https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg", "description": "Fresh groceries online"},
+                {"name": "JioMart", "url": "https://jiomart.com", "type": "grocery", "logo": "https://seeklogo.com/images/J/jiomart-logo-47C13BC7A5-seeklogo.com.png", "description": "Digital commerce platform"}
             ],
             "entertainment": [
-                {"name": "Netflix", "url": "https://netflix.com", "type": "streaming", "logo": "🎬", "description": "Movies & TV shows"},
-                {"name": "Amazon Prime", "url": "https://primevideo.com", "type": "streaming", "logo": "📺", "description": "Prime Video streaming"},
-                {"name": "Disney+ Hotstar", "url": "https://hotstar.com", "type": "streaming", "logo": "🏰", "description": "Sports & entertainment"},
-                {"name": "Sony LIV", "url": "https://sonyliv.com", "type": "streaming", "logo": "📱", "description": "Live TV & movies"},
-                {"name": "Zee5", "url": "https://zee5.com", "type": "streaming", "logo": "🎭", "description": "Regional content hub"},
-                {"name": "Spotify", "url": "https://spotify.com", "type": "music", "logo": "🎵", "description": "Music streaming"}
+                {"name": "Netflix", "url": "https://netflix.com", "type": "streaming", "logo": "https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg", "description": "Movies & TV shows"},
+                {"name": "Amazon Prime", "url": "https://primevideo.com", "type": "streaming", "logo": "https://upload.wikimedia.org/wikipedia/commons/f/f1/Prime_Video.png", "description": "Prime Video streaming"},
+                {"name": "Disney+ Hotstar", "url": "https://hotstar.com", "type": "streaming", "logo": "https://upload.wikimedia.org/wikipedia/commons/1/1e/Disney%2B_Hotstar_logo.svg", "description": "Sports & entertainment"},
+                {"name": "Sony LIV", "url": "https://sonyliv.com", "type": "streaming", "logo": "https://seeklogo.com/images/S/sony-liv-logo-7F0C8A5D65-seeklogo.com.png", "description": "Live TV & movies"},
+                {"name": "Zee5", "url": "https://zee5.com", "type": "streaming", "logo": "https://seeklogo.com/images/Z/zee5-logo-412B1C7A7C-seeklogo.com.png", "description": "Regional content hub"},
+                {"name": "Spotify", "url": "https://spotify.com", "type": "music", "logo": "https://upload.wikimedia.org/wikipedia/commons/1/19/Spotify_logo_without_text.svg", "description": "Music streaming"}
             ],
             "books": [
-                {"name": "Amazon Kindle", "url": "https://amazon.in/kindle", "type": "ebooks", "logo": "📚", "description": "Digital books & reading"},
-                {"name": "Audible", "url": "https://audible.in", "type": "audiobooks", "logo": "🎧", "description": "Audiobooks & podcasts"},
-                {"name": "Google Books", "url": "https://books.google.com", "type": "ebooks", "logo": "📖", "description": "Digital library"},
-                {"name": "Flipkart Books", "url": "https://flipkart.com/books", "type": "physical", "logo": "📕", "description": "Physical & digital books"},
-                {"name": "Scribd", "url": "https://scribd.com", "type": "subscription", "logo": "📄", "description": "Unlimited reading"},
-                {"name": "Byju's", "url": "https://byjus.com", "type": "educational", "logo": "🎓", "description": "Learning platform"}
+                {"name": "Amazon Kindle", "url": "https://amazon.in/kindle", "type": "ebooks", "logo": "https://upload.wikimedia.org/wikipedia/commons/f/f4/Amazon_Kindle_logo.svg", "description": "Digital books & reading"},
+                {"name": "Audible", "url": "https://audible.in", "type": "audiobooks", "logo": "https://upload.wikimedia.org/wikipedia/commons/2/28/Audible_logo.svg", "description": "Audiobooks & podcasts"},
+                {"name": "Google Books", "url": "https://books.google.com", "type": "ebooks", "logo": "https://upload.wikimedia.org/wikipedia/commons/f/fb/Google_Play_Books_icon_%282022%29.svg", "description": "Digital library"},
+                {"name": "Flipkart Books", "url": "https://flipkart.com/books", "type": "physical", "logo": "https://upload.wikimedia.org/wikipedia/en/7/7a/Flipkart_logo.svg", "description": "Physical & digital books"},
+                {"name": "Scribd", "url": "https://scribd.com", "type": "subscription", "logo": "https://seeklogo.com/images/S/scribd-logo-093C79F983-seeklogo.com.png", "description": "Unlimited reading"},
+                {"name": "Byju's", "url": "https://byjus.com", "type": "educational", "logo": "https://seeklogo.com/images/B/byjus-logo-834D7618C4-seeklogo.com.png", "description": "Learning platform"}
             ],
             "rent": [
-                {"name": "PayTM", "url": "https://paytm.com", "type": "payment", "logo": "💳", "description": "Digital payments"},
-                {"name": "PhonePe", "url": "https://phonepe.com", "type": "payment", "logo": "📱", "description": "UPI payments"},
-                {"name": "Google Pay", "url": "https://pay.google.com", "type": "payment", "logo": "💰", "description": "Quick payments"},
-                {"name": "CRED", "url": "https://cred.club", "type": "bills", "logo": "💎", "description": "Credit card bills"}
+                {"name": "PayTM", "url": "https://paytm.com", "type": "payment", "logo": "https://upload.wikimedia.org/wikipedia/commons/2/24/Paytm_Logo_%28standalone%29.svg", "description": "Digital payments"},
+                {"name": "PhonePe", "url": "https://phonepe.com", "type": "payment", "logo": "https://upload.wikimedia.org/wikipedia/commons/4/42/PhonePe_Logo.svg", "description": "UPI payments"},
+                {"name": "Google Pay", "url": "https://pay.google.com", "type": "payment", "logo": "https://upload.wikimedia.org/wikipedia/commons/f/f2/Google_Pay_Logo.svg", "description": "Quick payments"},
+                {"name": "CRED", "url": "https://cred.club", "type": "bills", "logo": "https://seeklogo.com/images/C/cred-logo-48D0E4DD1A-seeklogo.com.png", "description": "Credit card bills"}
             ],
             "utilities": [
-                {"name": "PayTM Bills", "url": "https://paytm.com/electricity-bill-payment", "type": "bills", "logo": "⚡", "description": "Utility bill payments"},
-                {"name": "PhonePe Bills", "url": "https://phonepe.com/bill-payments", "type": "bills", "logo": "🔌", "description": "All bill payments"},
-                {"name": "CRED Bills", "url": "https://cred.club", "type": "bills", "logo": "💡", "description": "Earn rewards on bills"},
-                {"name": "Freecharge", "url": "https://freecharge.in", "type": "bills", "logo": "🔋", "description": "Mobile & utility bills"}
+                {"name": "PayTM Bills", "url": "https://paytm.com/electricity-bill-payment", "type": "bills", "logo": "https://upload.wikimedia.org/wikipedia/commons/2/24/Paytm_Logo_%28standalone%29.svg", "description": "Utility bill payments"},
+                {"name": "PhonePe Bills", "url": "https://phonepe.com/bill-payments", "type": "bills", "logo": "https://upload.wikimedia.org/wikipedia/commons/4/42/PhonePe_Logo.svg", "description": "All bill payments"},
+                {"name": "CRED Bills", "url": "https://cred.club", "type": "bills", "logo": "https://seeklogo.com/images/C/cred-logo-48D0E4DD1A-seeklogo.com.png", "description": "Earn rewards on bills"},
+                {"name": "Freecharge", "url": "https://freecharge.in", "type": "bills", "logo": "https://seeklogo.com/images/F/freecharge-logo-1C6E6A5D2E-seeklogo.com.png", "description": "Mobile & utility bills"}
             ],
             "subscriptions": [
-                {"name": "Truecaller", "url": "https://truecaller.com", "type": "utility", "logo": "📞", "description": "Premium caller ID"},
-                {"name": "Spotify Premium", "url": "https://spotify.com/premium", "type": "music", "logo": "🎵", "description": "Ad-free music"},
-                {"name": "YouTube Premium", "url": "https://youtube.com/premium", "type": "video", "logo": "📹", "description": "Ad-free videos"},
-                {"name": "Adobe Creative", "url": "https://adobe.com", "type": "creative", "logo": "🎨", "description": "Design software"},
-                {"name": "Microsoft 365", "url": "https://office.com", "type": "productivity", "logo": "💼", "description": "Office suite"}
+                {"name": "Truecaller", "url": "https://truecaller.com", "type": "utility", "logo": "https://seeklogo.com/images/T/truecaller-logo-61F1C75C5D-seeklogo.com.png", "description": "Premium caller ID"},
+                {"name": "Spotify Premium", "url": "https://spotify.com/premium", "type": "music", "logo": "https://upload.wikimedia.org/wikipedia/commons/1/19/Spotify_logo_without_text.svg", "description": "Ad-free music"},
+                {"name": "YouTube Premium", "url": "https://youtube.com/premium", "type": "video", "logo": "https://upload.wikimedia.org/wikipedia/commons/0/09/YouTube_full-color_icon_%282017%29.svg", "description": "Ad-free videos"},
+                {"name": "Adobe Creative", "url": "https://adobe.com", "type": "creative", "logo": "https://upload.wikimedia.org/wikipedia/commons/8/8d/Adobe_Corporate_Logo.svg", "description": "Design software"},
+                {"name": "Microsoft 365", "url": "https://office.com", "type": "productivity", "logo": "https://upload.wikimedia.org/wikipedia/commons/3/34/Microsoft_Office_Excel_%282019%E2%80%93present%29.svg", "description": "Office suite"}
             ]
         }
         

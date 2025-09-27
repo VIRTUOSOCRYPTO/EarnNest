@@ -14,9 +14,7 @@ import {
   CheckCircleIcon,
   ClockIcon,
   CurrencyRupeeIcon,
-  SpeakerWaveIcon
 } from '@heroicons/react/24/outline';
-import VoiceCommand from './VoiceCommand';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -47,11 +45,7 @@ const Transactions = () => {
   const [quickAddData, setQuickAddData] = useState({});
   const [isQuickAdding, setIsQuickAdding] = useState(false);
   
-  // Voice Command states
-  const [voiceCommandActive, setVoiceCommandActive] = useState(false);
-  const [pendingVoiceData, setPendingVoiceData] = useState(null);
-  const [showVoiceConfirmation, setShowVoiceConfirmation] = useState(false);
-  const [voiceProcessing, setVoiceProcessing] = useState(false);
+  // Voice Command functionality removed
   
   const [formData, setFormData] = useState({
     type: 'income',
@@ -550,117 +544,7 @@ const Transactions = () => {
     return Object.values(multiCategoryData.categories).reduce((sum, amount) => sum + (parseFloat(amount) || 0), 0);
   };
 
-  // Voice Command handlers
-  const handleVoiceCommand = (result) => {
-    console.log('Voice command result:', result);
-    
-    if (result.success) {
-      // For wake word commands, auto-submit the transaction immediately
-      if (result.isWakeWordCommand) {
-        handleVoiceTransactionData(result.data, true); // true = autoSubmit
-      } else {
-        // For manual voice commands, show confirmation dialog
-        setPendingVoiceData(result.data);
-        setShowVoiceConfirmation(true);
-      }
-    } else {
-      // Handle voice command errors
-      console.error('Voice command error:', result.error);
-      setBudgetWarning(result.error || 'Voice command failed. Please try again.');
-    }
-  };
-
-  const handleVoiceTransactionData = async (voiceData, autoSubmit = false) => {
-    console.log('Processing voice transaction data:', voiceData, 'autoSubmit:', autoSubmit);
-    
-    setVoiceProcessing(true);
-    
-    // Update form with voice command data
-    const newFormData = {
-      type: voiceData.type,
-      amount: voiceData.amount.toString(),
-      category: voiceData.category,
-      description: voiceData.description,
-      source: voiceData.source || voiceData.description,
-      is_hustle_related: voiceData.is_hustle_related || false
-    };
-    
-    setFormData(newFormData);
-    setIsMultiCategory(false);
-    setBudgetWarning('');
-    
-    // For wake word commands, auto-submit the transaction
-    if (autoSubmit) {
-      try {
-        setSubmitting(true);
-        setBudgetWarning(`🎤 Processing voice command: "${voiceData.originalTranscript}"`);
-        
-        // Validate budget for expenses
-        if (newFormData.type === 'expense') {
-          const error = await validateExpenseBudget(newFormData.category, parseFloat(newFormData.amount));
-          if (error) {
-            setBudgetWarning(`❌ Voice command failed: ${error}`);
-            setShowAddForm(true); // Show form for user to adjust
-            setVoiceProcessing(false);
-            return;
-          }
-        }
-
-        // Submit the transaction directly
-        const submitData = {
-          ...newFormData,
-          amount: parseFloat(newFormData.amount)
-        };
-
-        await axios.post(`${API}/transactions`, submitData);
-        
-        // Success feedback with auto-clear after 5 seconds
-        setBudgetWarning(`✅ Success! Added ${newFormData.type} ₹${newFormData.amount} for ${newFormData.category}`);
-        setTimeout(() => {
-          setBudgetWarning('');
-        }, 5000);
-        
-        // Refresh transactions
-        fetchTransactions();
-        
-        // Reset form
-        setFormData({
-          type: 'income',
-          amount: '',
-          category: '',
-          description: '',
-          source: '',
-          is_hustle_related: false
-        });
-        
-      } catch (error) {
-        console.error('Error auto-submitting voice transaction:', error);
-        setBudgetWarning(`❌ Failed to add transaction: ${error.response?.data?.detail || 'Please try again'}`);
-        setShowAddForm(true); // Show form for manual submission
-      } finally {
-        setSubmitting(false);
-        setVoiceProcessing(false);
-      }
-    } else {
-      // For manual commands, show the pre-filled form for review
-      setShowAddForm(true);
-      setBudgetWarning(`🎤 Voice command processed - form pre-filled for your review`);
-      setVoiceProcessing(false);
-    }
-  };
-
-  const confirmVoiceCommand = () => {
-    if (pendingVoiceData) {
-      handleVoiceTransactionData(pendingVoiceData, false); // false = show form for review
-      setPendingVoiceData(null);
-      setShowVoiceConfirmation(false);
-    }
-  };
-
-  const cancelVoiceCommand = () => {
-    setPendingVoiceData(null);
-    setShowVoiceConfirmation(false);
-  };
+  // Voice command handlers removed
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-IN', {
@@ -715,38 +599,7 @@ const Transactions = () => {
         </button>
       </div>
 
-      {/* Voice Command Interface */}
-      <div className="mb-6 fade-in">
-        <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">🎤 Voice Commands</h3>
-              <div className="text-sm text-gray-600 space-y-1">
-                <p>
-                  <span className="font-medium">Instant Mode:</span> Say "Hey EarnNest, I earned ₹500 from tutoring" - transaction adds automatically
-                </p>
-                <p>
-                  <span className="font-medium">Manual Mode:</span> Click microphone button to speak - review before submitting
-                </p>
-              </div>
-            </div>
-          </div>
-          <VoiceCommand
-            onVoiceCommand={handleVoiceCommand}
-            onTransactionData={handleVoiceTransactionData}
-            disabled={submitting || voiceProcessing}
-            className="w-full"
-          />
-          
-          {/* Voice Processing Indicator */}
-          {voiceProcessing && (
-            <div className="mt-3 flex items-center justify-center gap-2 text-blue-600">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-              <span className="text-sm">Processing voice command...</span>
-            </div>
-          )}
-        </div>
-      </div>
+      {/* Voice Command Interface removed */}
 
       {/* Add Transaction Modal */}
       {showAddForm && (
@@ -1442,67 +1295,7 @@ const Transactions = () => {
         </div>
       )}
 
-      {/* Voice Command Confirmation Modal */}
-      {showVoiceConfirmation && pendingVoiceData && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <div className="flex items-center space-x-3 mb-4">
-              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                <SpeakerWaveIcon className="w-5 h-5 text-blue-600" />
-              </div>
-              <h3 className="text-lg font-semibold">Confirm Voice Command</h3>
-            </div>
-            
-            <div className="space-y-3 mb-6">
-              <div className="bg-gray-50 p-3 rounded-lg">
-                <div className="text-sm text-gray-600 mb-1">Original command:</div>
-                <div className="text-sm font-medium">"{pendingVoiceData.originalTranscript}"</div>
-              </div>
-              
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Type:</span>
-                  <span className={`text-sm font-medium ${
-                    pendingVoiceData.type === 'income' ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {pendingVoiceData.type === 'income' ? 'Income' : 'Expense'}
-                  </span>
-                </div>
-                
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Amount:</span>
-                  <span className="text-sm font-medium">₹{pendingVoiceData.amount}</span>
-                </div>
-                
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Category:</span>
-                  <span className="text-sm font-medium">{pendingVoiceData.category}</span>
-                </div>
-                
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Description:</span>
-                  <span className="text-sm font-medium">{pendingVoiceData.description}</span>
-                </div>
-              </div>
-            </div>
-            
-            <div className="flex space-x-3">
-              <button
-                onClick={cancelVoiceCommand}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmVoiceCommand}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Confirm & Add
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Voice Command Confirmation Modal removed */}
     </div>
   );
 };

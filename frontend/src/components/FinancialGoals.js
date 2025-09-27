@@ -172,7 +172,7 @@ const FinancialGoals = () => {
         </div>
         <button
           onClick={() => setShowForm(true)}
-          className="btn-primary flex items-center gap-2"
+          className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-6 py-3 rounded-lg flex items-center gap-2 transition-colors shadow-lg"
         >
           <PlusIcon className="w-5 h-5" />
           Add Goal
@@ -194,7 +194,7 @@ const FinancialGoals = () => {
           <p className="text-gray-400 mb-6">Start by setting your first financial goal to track your progress</p>
           <button
             onClick={() => setShowForm(true)}
-            className="btn-primary flex items-center gap-2 mx-auto"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-6 py-3 rounded-lg flex items-center gap-2 mx-auto transition-colors shadow-lg"
           >
             <PlusIcon className="w-5 h-5" />
             Create Your First Goal

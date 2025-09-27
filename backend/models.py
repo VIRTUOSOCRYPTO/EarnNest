@@ -828,3 +828,138 @@ class PriceComparisonQuery(BaseModel):
     product_name: str
     category: str = "Shopping"
     budget_range: Optional[str] = None  # "under_1000", "1000_5000", "5000_above"
+
+# Advanced Income Tracking System Models
+
+class AutoImportSource(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    source_type: str  # "email", "sms"
+    provider: str  # "gmail", "outlook", "sms_provider"
+    source_name: str  # User-friendly name
+    is_active: bool = True
+    last_sync: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    
+    @validator('source_type')
+    def validate_source_type(cls, v):
+        allowed_types = ["email", "sms"]
+        if v not in allowed_types:
+            raise ValueError(f'Source type must be one of: {", ".join(allowed_types)}')
+        return v
+
+class AutoImportSourceCreate(BaseModel):
+    source_type: str
+    provider: str
+    source_name: str
+    
+    @validator('source_type')
+    def validate_source_type(cls, v):
+        allowed_types = ["email", "sms"]
+        if v not in allowed_types:
+            raise ValueError(f'Source type must be one of: {", ".join(allowed_types)}')
+        return v
+
+class ParsedTransaction(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    source_id: Optional[str] = None  # Reference to AutoImportSource
+    original_content: str  # Raw SMS/Email content
+    parsed_data: Dict[str, Any]  # AI extracted data
+    confidence_score: float = Field(ge=0.0, le=1.0)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class TransactionSuggestion(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    parsed_transaction_id: str
+    suggested_type: str  # "income" or "expense"
+    suggested_amount: float
+    suggested_category: str
+    suggested_description: str
+    suggested_source: Optional[str] = None  # For income: "freelance", "salary", "scholarship", "investment", "part_time"
+    confidence_score: float = Field(ge=0.0, le=1.0)
+    status: str = "pending"  # "pending", "approved", "rejected"
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    approved_at: Optional[datetime] = None
+    
+    @validator('status')
+    def validate_status(cls, v):
+        allowed_statuses = ["pending", "approved", "rejected"]
+        if v not in allowed_statuses:
+            raise ValueError(f'Status must be one of: {", ".join(allowed_statuses)}')
+        return v
+        
+    @validator('suggested_type')
+    def validate_suggested_type(cls, v):
+        if v not in ['income', 'expense']:
+            raise ValueError('Suggested type must be either "income" or "expense"')
+        return v
+
+class TransactionSuggestionCreate(BaseModel):
+    parsed_transaction_id: str
+    suggested_type: str
+    suggested_amount: float
+    suggested_category: str
+    suggested_description: str
+    suggested_source: Optional[str] = None
+    confidence_score: float = Field(ge=0.0, le=1.0)
+    
+    @validator('suggested_type')
+    def validate_suggested_type(cls, v):
+        if v not in ['income', 'expense']:
+            raise ValueError('Suggested type must be either "income" or "expense"')
+        return v
+
+class LearningFeedback(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    suggestion_id: str
+    original_suggestion: Dict[str, Any]  # Original AI suggestion
+    user_correction: Dict[str, Any]  # User's correction
+    feedback_type: str  # "correction", "approval", "rejection"
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    
+    @validator('feedback_type')
+    def validate_feedback_type(cls, v):
+        allowed_types = ["correction", "approval", "rejection"]
+        if v not in allowed_types:
+            raise ValueError(f'Feedback type must be one of: {", ".join(allowed_types)}')
+        return v
+
+class LearningFeedbackCreate(BaseModel):
+    suggestion_id: str
+    original_suggestion: Dict[str, Any]
+    user_correction: Dict[str, Any]
+    feedback_type: str
+    
+    @validator('feedback_type')
+    def validate_feedback_type(cls, v):
+        allowed_types = ["correction", "approval", "rejection"]
+        if v not in allowed_types:
+            raise ValueError(f'Feedback type must be one of: {", ".join(allowed_types)}')
+        return v
+
+class ContentParseRequest(BaseModel):
+    content: str
+    content_type: str  # "sms", "email"
+    
+    @validator('content_type')
+    def validate_content_type(cls, v):
+        allowed_types = ["sms", "email"]
+        if v not in allowed_types:
+            raise ValueError(f'Content type must be one of: {", ".join(allowed_types)}')
+        return v
+    
+    @validator('content')
+    def validate_content(cls, v):
+        if not v or len(v.strip()) < 10:
+            raise ValueError('Content must be at least 10 characters long')
+        if len(v) > 5000:
+            raise ValueError('Content cannot exceed 5000 characters')
+        return v.strip()
+
+class SuggestionApprovalRequest(BaseModel):
+    suggestion_id: str
+    approved: bool
+    corrections: Optional[Dict[str, Any]] = None  # If user wants to modify before approving

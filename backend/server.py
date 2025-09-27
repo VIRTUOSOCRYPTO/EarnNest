@@ -467,6 +467,224 @@ async def update_monthly_income_goal_progress(user_id: str):
         logger.error(f"Error updating monthly income goal: {e}")
         # Don't raise exception as this is a background update
 
+# Emergency Services Helper Functions
+async def get_area_info_from_coordinates(latitude: float, longitude: float) -> Dict[str, str]:
+    """Get area information from coordinates (simplified implementation)"""
+    try:
+        # This is a simplified implementation
+        # In production, you would use a proper geocoding service like Google Maps API
+        return {
+            "area": "Central Area",
+            "city": "Bangalore",
+            "state": "Karnataka"
+        }
+    except Exception as e:
+        logger.error(f"Geocoding error: {e}")
+        return {"area": "Unknown Area", "city": "Bangalore", "state": "Karnataka"}
+
+async def get_nearby_emergency_hospitals(latitude: float, longitude: float) -> List[Dict]:
+    """Get nearby emergency hospitals"""
+    # Mock data - in production, integrate with Google Places API or similar
+    hospitals = [
+        {
+            "name": "Manipal Hospital",
+            "address": "98, Rustom Bagh, Airport Rd, Bangalore",
+            "phone": "+91-80-2502-4444",
+            "distance": "2.3 km",
+            "emergency_services": ["24/7 Emergency", "Trauma Center", "ICU"],
+            "rating": 4.2
+        },
+        {
+            "name": "Fortis Hospital",
+            "address": "154/9, Bannerghatta Rd, Bangalore",
+            "phone": "+91-80-6621-4444",
+            "distance": "3.1 km",
+            "emergency_services": ["Emergency Ward", "Cardiac Care", "Ambulance"],
+            "rating": 4.1
+        },
+        {
+            "name": "Apollo Hospital",
+            "address": "154/11, Bannerghatta Rd, Bangalore",
+            "phone": "+91-80-2630-0300",
+            "distance": "4.2 km",
+            "emergency_services": ["24/7 Emergency", "Multi-specialty", "Blood Bank"],
+            "rating": 4.3
+        }
+    ]
+    return hospitals
+
+async def get_nearby_police_stations(latitude: float, longitude: float) -> List[Dict]:
+    """Get nearby police stations"""
+    police_stations = [
+        {
+            "name": "Koramangala Police Station",
+            "address": "80 Feet Rd, 5th Block, Koramangala, Bangalore",
+            "phone": "+91-80-2553-2324",
+            "distance": "1.8 km",
+            "services": ["Emergency Response", "FIR Registration", "Traffic Police"],
+            "emergency_number": "100"
+        },
+        {
+            "name": "BTM Layout Police Station",
+            "address": "16th Main Rd, BTM 2nd Stage, Bangalore",
+            "phone": "+91-80-2668-1101",
+            "distance": "2.5 km",
+            "services": ["Crime Investigation", "Women Safety", "Cyber Crime"],
+            "emergency_number": "100"
+        }
+    ]
+    return police_stations
+
+async def get_nearby_atms_banks(latitude: float, longitude: float) -> List[Dict]:
+    """Get nearby ATMs and banks"""
+    atms_banks = [
+        {
+            "name": "SBI ATM",
+            "type": "ATM",
+            "address": "Forum Mall, Koramangala, Bangalore",
+            "distance": "0.8 km",
+            "services": ["Cash Withdrawal", "Balance Inquiry", "24/7 Available"],
+            "bank": "State Bank of India"
+        },
+        {
+            "name": "HDFC Bank",
+            "type": "Bank",
+            "address": "Koramangala 5th Block, Bangalore",
+            "distance": "1.2 km",
+            "services": ["Banking Services", "ATM", "Emergency Cash"],
+            "phone": "+91-80-2553-4567",
+            "hours": "10:00 AM - 4:00 PM"
+        },
+        {
+            "name": "ICICI Bank ATM",
+            "type": "ATM",
+            "address": "BTM Layout, Bangalore",
+            "distance": "1.5 km",
+            "services": ["Cash Withdrawal", "Mini Statement", "24/7 Available"],
+            "bank": "ICICI Bank"
+        }
+    ]
+    return atms_banks
+
+async def get_nearby_pharmacies(latitude: float, longitude: float) -> List[Dict]:
+    """Get nearby pharmacies"""
+    pharmacies = [
+        {
+            "name": "Apollo Pharmacy",
+            "address": "Forum Mall, Koramangala, Bangalore",
+            "phone": "+91-80-2553-7890",
+            "distance": "0.9 km",
+            "services": ["24/7 Open", "Emergency Medicines", "Home Delivery"],
+            "rating": 4.2
+        },
+        {
+            "name": "MedPlus",
+            "address": "5th Block, Koramangala, Bangalore",
+            "phone": "+91-80-2553-1234",
+            "distance": "1.1 km",
+            "services": ["Prescription Medicines", "Health Products", "Online Orders"],
+            "rating": 4.0
+        },
+        {
+            "name": "Netmeds",
+            "address": "BTM Layout, Bangalore",
+            "phone": "+91-80-2668-5678",
+            "distance": "2.0 km",
+            "services": ["Medicine Delivery", "Health Checkups", "24/7 Support"],
+            "rating": 4.1
+        }
+    ]
+    return pharmacies
+
+async def get_nearby_gas_stations(latitude: float, longitude: float) -> List[Dict]:
+    """Get nearby gas stations"""
+    gas_stations = [
+        {
+            "name": "Indian Oil Petrol Pump",
+            "address": "Hosur Main Rd, Koramangala, Bangalore",
+            "distance": "1.3 km",
+            "services": ["Petrol", "Diesel", "Air & Water", "24/7 Open"],
+            "fuel_types": ["Petrol", "Diesel", "CNG"]
+        },
+        {
+            "name": "HP Petrol Pump",
+            "address": "Bannerghatta Rd, BTM Layout, Bangalore",
+            "distance": "2.1 km",
+            "services": ["Fuel", "Convenience Store", "ATM"],
+            "fuel_types": ["Petrol", "Diesel"]
+        }
+    ]
+    return gas_stations
+
+async def get_nearby_fire_stations(latitude: float, longitude: float) -> List[Dict]:
+    """Get nearby fire stations"""
+    fire_stations = [
+        {
+            "name": "Koramangala Fire Station",
+            "address": "80 Feet Rd, Koramangala, Bangalore",
+            "phone": "+91-80-2553-0101",
+            "distance": "2.0 km",
+            "services": ["Fire Emergency", "Rescue Operations", "Ambulance"],
+            "emergency_number": "101"
+        },
+        {
+            "name": "BTM Fire Station",
+            "address": "BTM Layout, Bangalore",
+            "phone": "+91-80-2668-0101",
+            "distance": "3.2 km",
+            "services": ["Fire Fighting", "Emergency Response", "Safety Training"],
+            "emergency_number": "101"
+        }
+    ]
+    return fire_stations
+
+async def get_nearby_emergency_shelters(latitude: float, longitude: float) -> List[Dict]:
+    """Get nearby emergency shelters"""
+    shelters = [
+        {
+            "name": "Government Emergency Shelter",
+            "address": "Koramangala Social Welfare Office, Bangalore",
+            "phone": "+91-80-2553-2000",
+            "distance": "2.5 km",
+            "services": ["Temporary Accommodation", "Food", "Medical Aid"],
+            "capacity": "50 people",
+            "availability": "24/7"
+        },
+        {
+            "name": "NGO Relief Center",
+            "address": "BTM Layout Community Center, Bangalore",
+            "phone": "+91-80-2668-3000",
+            "distance": "3.0 km",
+            "services": ["Emergency Housing", "Counseling", "Basic Necessities"],
+            "capacity": "30 people",
+            "availability": "Emergency basis"
+        }
+    ]
+    return shelters
+
+async def get_local_emergency_contacts(city: str = "Bangalore") -> Dict[str, List[Dict]]:
+    """Get local emergency contacts"""
+    contacts = {
+        "emergency_numbers": [
+            {"service": "Police", "number": "100", "description": "Police Emergency"},
+            {"service": "Fire", "number": "101", "description": "Fire Emergency"},
+            {"service": "Ambulance", "number": "102", "description": "Medical Emergency"},
+            {"service": "Disaster Management", "number": "108", "description": "Emergency Response"}
+        ],
+        "helplines": [
+            {"service": "Women Helpline", "number": "1091", "description": "Women in Distress"},
+            {"service": "Child Helpline", "number": "1098", "description": "Child Emergency"},
+            {"service": "Senior Citizen", "number": "14567", "description": "Elder Care Emergency"},
+            {"service": "Mental Health", "number": "9152987821", "description": "Crisis Counseling"}
+        ],
+        "local_services": [
+            {"service": "BBMP Control Room", "number": "+91-80-2221-1111", "description": "Bangalore City Services"},
+            {"service": "Traffic Police", "number": "+91-80-2294-2444", "description": "Traffic Emergency"},
+            {"service": "Electricity Board", "number": "1912", "description": "Power Emergency"},
+            {"service": "Water Board", "number": "+91-80-2294-4444", "description": "Water Emergency"}
+        ]
+    }
+    return contacts
 # Enhanced Authentication Routes with Comprehensive OTP Security
 @api_router.get("/auth/trending-skills")
 async def get_trending_skills():
@@ -1781,6 +1999,52 @@ async def get_emergency_types_endpoint(request: Request, user_id: str = Depends(
     except Exception as e:
         logger.error(f"Emergency types error: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to get emergency types")
+
+@api_router.post("/emergency-services")
+@limiter.limit("10/minute")
+async def get_emergency_services_endpoint(
+    request: Request,
+    location_data: dict,
+    user_id: str = Depends(get_current_user)
+):
+    """Get comprehensive emergency services based on user location"""
+    try:
+        latitude = location_data.get("latitude")
+        longitude = location_data.get("longitude")
+        
+        if not latitude or not longitude:
+            raise HTTPException(status_code=400, detail="Location coordinates required")
+        
+        # Reverse geocoding to get area information (simplified)
+        area_info = await get_area_info_from_coordinates(latitude, longitude)
+        
+        # Get comprehensive emergency services
+        emergency_services = {
+            "hospitals": await get_nearby_emergency_hospitals(latitude, longitude),
+            "police_stations": await get_nearby_police_stations(latitude, longitude),
+            "atms_banks": await get_nearby_atms_banks(latitude, longitude),
+            "pharmacies": await get_nearby_pharmacies(latitude, longitude),
+            "gas_stations": await get_nearby_gas_stations(latitude, longitude),
+            "fire_stations": await get_nearby_fire_stations(latitude, longitude),
+            "emergency_shelters": await get_nearby_emergency_shelters(latitude, longitude),
+            "emergency_contacts": await get_local_emergency_contacts(area_info.get("city", "Bangalore"))
+        }
+        
+        return {
+            "location": {
+                "latitude": latitude,
+                "longitude": longitude,
+                "area": area_info.get("area", "Unknown Area"),
+                "city": area_info.get("city", "Unknown City"),
+                "state": area_info.get("state", "Unknown State")
+            },
+            "emergency_services": emergency_services,
+            "last_updated": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Emergency services error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get emergency services")
 
 @api_router.post("/emergency-hospitals")
 @limiter.limit("15/minute")

@@ -1880,6 +1880,299 @@ async def get_emergency_hospitals_endpoint(
         logger.error(f"Emergency hospitals error: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to get emergency hospitals")
 
+# Advanced Income Tracking System - Auto Import Routes
+@api_router.post("/auto-import/parse-content")
+@limiter.limit("20/minute")
+async def parse_content_endpoint(
+    request: Request, 
+    parse_request: ContentParseRequest, 
+    user_id: str = Depends(get_current_user)
+):
+    """Parse SMS/Email content using AI to extract transaction information"""
+    try:
+        from auto_import_service import auto_import_service
+        
+        # Parse content using AI
+        parsed_data = await auto_import_service.parse_content(
+            content=parse_request.content,
+            content_type=parse_request.content_type,
+            user_id=user_id
+        )
+        
+        # Store parsed transaction
+        parsed_transaction_data = {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "original_content": parse_request.content,
+            "parsed_data": parsed_data,
+            "confidence_score": parsed_data.get("confidence_score", 0.0)
+        }
+        
+        await create_parsed_transaction(parsed_transaction_data)
+        
+        # Check for potential duplicates
+        duplicates = await auto_import_service.detect_duplicates(user_id, parsed_data)
+        
+        # Create transaction suggestion
+        suggestion_data = {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "parsed_transaction_id": parsed_transaction_data["id"],
+            "suggested_type": parsed_data.get("transaction_type", "unknown"),
+            "suggested_amount": parsed_data.get("amount", 0.0),
+            "suggested_category": parsed_data.get("category", "Other"),
+            "suggested_description": parsed_data.get("description", "Auto-imported transaction"),
+            "suggested_source": parsed_data.get("income_source") if parsed_data.get("transaction_type") == "income" else None,
+            "confidence_score": parsed_data.get("confidence_score", 0.0),
+            "status": "pending"
+        }
+        
+        await create_transaction_suggestion(suggestion_data)
+        
+        # Get categorization suggestions
+        categorization_suggestions = await auto_import_service.get_categorization_suggestions(parsed_data)
+        
+        return {
+            "success": True,
+            "parsed_data": parsed_data,
+            "suggestion_id": suggestion_data["id"],
+            "potential_duplicates": duplicates,
+            "categorization_suggestions": categorization_suggestions,
+            "message": "Content parsed successfully. Review the suggestion before approving."
+        }
+        
+    except Exception as e:
+        logger.error(f"Content parsing error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to parse content: {str(e)}")
+
+@api_router.get("/auto-import/suggestions")
+@limiter.limit("30/minute")
+async def get_pending_suggestions_endpoint(
+    request: Request,
+    user_id: str = Depends(get_current_user),
+    limit: int = 20
+):
+    """Get user's pending transaction suggestions"""
+    try:
+        suggestions = await get_user_pending_suggestions(user_id, limit)
+        
+        # Enrich suggestions with parsed transaction data
+        enriched_suggestions = []
+        for suggestion in suggestions:
+            parsed_transaction = await get_parsed_transaction(suggestion["parsed_transaction_id"])
+            suggestion["original_content"] = parsed_transaction["original_content"] if parsed_transaction else None
+            suggestion["parsed_data"] = parsed_transaction["parsed_data"] if parsed_transaction else None
+            enriched_suggestions.append(suggestion)
+        
+        return {
+            "suggestions": enriched_suggestions,
+            "count": len(enriched_suggestions)
+        }
+        
+    except Exception as e:
+        logger.error(f"Get suggestions error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get suggestions")
+
+@api_router.post("/auto-import/approve-suggestion")  
+@limiter.limit("30/minute")
+async def approve_suggestion_endpoint(
+    request: Request,
+    approval_request: SuggestionApprovalRequest,
+    user_id: str = Depends(get_current_user)
+):
+    """Approve or reject a transaction suggestion"""
+    try:
+        # Get the suggestion
+        suggestion = await get_suggestion_by_id(approval_request.suggestion_id)
+        if not suggestion:
+            raise HTTPException(status_code=404, detail="Suggestion not found")
+        
+        if suggestion["user_id"] != user_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        if approval_request.approved:
+            # Create actual transaction
+            transaction_data = {
+                "id": str(uuid.uuid4()),
+                "user_id": user_id,
+                "type": suggestion["suggested_type"],
+                "amount": suggestion["suggested_amount"],
+                "category": suggestion["suggested_category"],
+                "description": suggestion["suggested_description"],
+                "source": suggestion["suggested_source"],
+                "is_hustle_related": False
+            }
+            
+            # Apply corrections if provided
+            if approval_request.corrections:
+                transaction_data.update(approval_request.corrections)
+            
+            # Validate expense against budget if it's an expense
+            if transaction_data["type"] == "expense":
+                budget = await get_user_budget_by_category(user_id, transaction_data["category"])
+                if budget:
+                    remaining = budget["allocated_amount"] - budget["spent_amount"]
+                    if transaction_data["amount"] > remaining:
+                        raise HTTPException(
+                            status_code=400, 
+                            detail=f"No money, you reached the limit! Remaining budget: ₹{remaining:.2f}"
+                        )
+            
+            # Create the transaction
+            await create_transaction(transaction_data)
+            
+            # Update budget if expense
+            if transaction_data["type"] == "expense":
+                budget = await get_user_budget_by_category(user_id, transaction_data["category"])
+                if budget:
+                    new_spent = budget["spent_amount"] + transaction_data["amount"]
+                    await update_user_budget(budget["id"], {"spent_amount": new_spent})
+            
+            # Update suggestion status
+            await update_suggestion_status(
+                approval_request.suggestion_id, 
+                "approved", 
+                datetime.now(timezone.utc)
+            )
+            
+            # Store learning feedback
+            feedback_data = {
+                "id": str(uuid.uuid4()),
+                "user_id": user_id,
+                "suggestion_id": approval_request.suggestion_id,
+                "original_suggestion": {
+                    "type": suggestion["suggested_type"],
+                    "amount": suggestion["suggested_amount"],
+                    "category": suggestion["suggested_category"],
+                    "description": suggestion["suggested_description"],
+                    "source": suggestion["suggested_source"]
+                },
+                "user_correction": approval_request.corrections or {},
+                "feedback_type": "correction" if approval_request.corrections else "approval"
+            }
+            
+            await create_learning_feedback(feedback_data)
+            
+            return {
+                "success": True,
+                "transaction_id": transaction_data["id"],
+                "message": "Transaction approved and created successfully"
+            }
+        
+        else:
+            # Reject the suggestion
+            await update_suggestion_status(approval_request.suggestion_id, "rejected")
+            
+            # Store rejection feedback
+            feedback_data = {
+                "id": str(uuid.uuid4()),
+                "user_id": user_id,
+                "suggestion_id": approval_request.suggestion_id,
+                "original_suggestion": {
+                    "type": suggestion["suggested_type"],
+                    "amount": suggestion["suggested_amount"],
+                    "category": suggestion["suggested_category"],
+                    "description": suggestion["suggested_description"],
+                    "source": suggestion["suggested_source"]
+                },
+                "user_correction": {},
+                "feedback_type": "rejection"
+            }
+            
+            await create_learning_feedback(feedback_data)
+            
+            return {
+                "success": True,
+                "message": "Suggestion rejected successfully"
+            }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Approve suggestion error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to process suggestion")
+
+@api_router.post("/auto-import/configure-source")
+@limiter.limit("10/minute") 
+async def configure_source_endpoint(
+    request: Request,
+    source_config: AutoImportSourceCreate,
+    user_id: str = Depends(get_current_user)
+):
+    """Configure a new auto-import source"""
+    try:
+        source_data = {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "source_type": source_config.source_type,
+            "provider": source_config.provider,
+            "source_name": source_config.source_name,
+            "is_active": True,
+            "last_sync": None
+        }
+        
+        await create_auto_import_source(source_data)
+        
+        return {
+            "success": True,
+            "source_id": source_data["id"],
+            "message": f"{source_config.source_type.title()} source configured successfully"
+        }
+        
+    except Exception as e:
+        logger.error(f"Configure source error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to configure source")
+
+@api_router.get("/auto-import/sources")
+@limiter.limit("30/minute")
+async def get_sources_endpoint(
+    request: Request,
+    user_id: str = Depends(get_current_user)
+):
+    """Get user's configured auto-import sources"""
+    try:
+        sources = await get_user_auto_import_sources(user_id)
+        return {
+            "sources": sources,
+            "count": len(sources)
+        }
+        
+    except Exception as e:
+        logger.error(f"Get sources error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get sources")
+
+@api_router.get("/auto-import/learning-feedback")
+@limiter.limit("20/minute")
+async def get_learning_feedback_endpoint(
+    request: Request,
+    user_id: str = Depends(get_current_user),
+    limit: int = 50
+):
+    """Get user's learning feedback for AI improvement"""
+    try:
+        feedback = await get_user_learning_feedback(user_id, limit)
+        
+        # Analyze feedback patterns
+        total_feedback = len(feedback)
+        corrections = sum(1 for f in feedback if f["feedback_type"] == "correction")
+        approvals = sum(1 for f in feedback if f["feedback_type"] == "approval") 
+        rejections = sum(1 for f in feedback if f["feedback_type"] == "rejection")
+        
+        return {
+            "feedback": feedback,
+            "stats": {
+                "total_feedback": total_feedback,
+                "corrections": corrections,
+                "approvals": approvals,
+                "rejections": rejections,
+                "accuracy_rate": (approvals / total_feedback * 100) if total_feedback > 0 else 0
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Get learning feedback error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get learning feedback")
+
 # Include the router in the main app (after all endpoints are defined)
 app.include_router(api_router)
 

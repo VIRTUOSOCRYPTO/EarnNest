@@ -5,6 +5,21 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+def clean_mongo_doc(doc):
+    """Remove MongoDB ObjectId fields from document"""
+    if doc is None:
+        return None
+    if isinstance(doc, list):
+        return [clean_mongo_doc(item) for item in doc]
+    if isinstance(doc, dict):
+        cleaned = {}
+        for key, value in doc.items():
+            if key == '_id':
+                continue  # Skip MongoDB ObjectId field
+            cleaned[key] = clean_mongo_doc(value)
+        return cleaned
+    return doc
+
 # MongoDB connection
 mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
 db_name = os.environ.get('DB_NAME', 'earnwise_production')
@@ -87,6 +102,34 @@ async def init_database():
         await db.click_analytics.create_index("category")
         await db.click_analytics.create_index("clicked_at")
         await db.click_analytics.create_index([("category", 1), ("clicked_at", -1)])
+        
+        # Auto import sources collection indexes
+        await db.auto_import_sources.create_index("user_id")
+        await db.auto_import_sources.create_index("source_type")
+        await db.auto_import_sources.create_index("provider")
+        await db.auto_import_sources.create_index("is_active")
+        await db.auto_import_sources.create_index("created_at")
+        
+        # Parsed transactions collection indexes
+        await db.parsed_transactions.create_index("user_id")
+        await db.parsed_transactions.create_index("source_id")
+        await db.parsed_transactions.create_index("created_at")
+        await db.parsed_transactions.create_index("confidence_score")
+        
+        # Transaction suggestions collection indexes
+        await db.transaction_suggestions.create_index("user_id")
+        await db.transaction_suggestions.create_index("parsed_transaction_id")
+        await db.transaction_suggestions.create_index("status")
+        await db.transaction_suggestions.create_index("created_at")
+        await db.transaction_suggestions.create_index([("user_id", 1), ("status", 1)])
+        await db.transaction_suggestions.create_index("confidence_score")
+        
+        # Learning feedback collection indexes
+        await db.learning_feedback.create_index("user_id")
+        await db.learning_feedback.create_index("suggestion_id")
+        await db.learning_feedback.create_index("feedback_type")
+        await db.learning_feedback.create_index("created_at")
+        await db.learning_feedback.create_index([("user_id", 1), ("feedback_type", 1)])
         
         logger.info("Database indexes created successfully")
         
@@ -458,3 +501,101 @@ async def get_popular_suggestions(category: str, days: int = 30):
     ]
     
     return await db.click_analytics.aggregate(pipeline).to_list(10)
+
+# Advanced Income Tracking System Database Functions
+
+async def create_auto_import_source(source_data: dict):
+    """Create new auto-import source"""
+    source_data["created_at"] = datetime.now(timezone.utc)
+    return await db.auto_import_sources.insert_one(source_data)
+
+async def get_user_auto_import_sources(user_id: str):
+    """Get user's auto-import sources"""
+    cursor = db.auto_import_sources.find({"user_id": user_id}).sort("created_at", -1)
+    sources = await cursor.to_list(100)
+    return clean_mongo_doc(sources)
+
+async def update_auto_import_source(source_id: str, update_data: dict):
+    """Update auto-import source"""
+    return await db.auto_import_sources.update_one({"id": source_id}, {"$set": update_data})
+
+async def create_parsed_transaction(parsed_data: dict):
+    """Create new parsed transaction"""
+    parsed_data["created_at"] = datetime.now(timezone.utc)
+    return await db.parsed_transactions.insert_one(parsed_data)
+
+async def get_parsed_transaction(parsed_id: str):
+    """Get parsed transaction by ID"""
+    doc = await db.parsed_transactions.find_one({"id": parsed_id})
+    return clean_mongo_doc(doc)
+
+async def create_transaction_suggestion(suggestion_data: dict):
+    """Create new transaction suggestion"""
+    suggestion_data["created_at"] = datetime.now(timezone.utc)
+    return await db.transaction_suggestions.insert_one(suggestion_data)
+
+async def get_user_pending_suggestions(user_id: str, limit: int = 20):
+    """Get user's pending transaction suggestions"""
+    cursor = db.transaction_suggestions.find({
+        "user_id": user_id, 
+        "status": "pending"
+    }).sort("created_at", -1).limit(limit)
+    suggestions = await cursor.to_list(limit)
+    return clean_mongo_doc(suggestions)
+
+async def update_suggestion_status(suggestion_id: str, status: str, approved_at: datetime = None):
+    """Update suggestion status"""
+    update_data = {"status": status}
+    if approved_at:
+        update_data["approved_at"] = approved_at
+    return await db.transaction_suggestions.update_one({"id": suggestion_id}, {"$set": update_data})
+
+async def get_suggestion_by_id(suggestion_id: str):
+    """Get suggestion by ID"""
+    doc = await db.transaction_suggestions.find_one({"id": suggestion_id})
+    return clean_mongo_doc(doc)
+
+async def create_learning_feedback(feedback_data: dict):
+    """Create learning feedback entry"""
+    feedback_data["created_at"] = datetime.now(timezone.utc)
+    return await db.learning_feedback.insert_one(feedback_data)
+
+async def get_user_learning_feedback(user_id: str, limit: int = 100):
+    """Get user's learning feedback for improving AI suggestions"""
+    cursor = db.learning_feedback.find({"user_id": user_id}).sort("created_at", -1).limit(limit)
+    feedback = await cursor.to_list(limit)
+    return clean_mongo_doc(feedback)
+
+async def check_duplicate_transaction(user_id: str, amount: float, date_range_hours: int = 24):
+    """Check for potential duplicate transactions within specified time range"""
+    # Check for transactions with same amount within the time range
+    start_time = datetime.now(timezone.utc) - timedelta(hours=date_range_hours)
+    
+    existing_transactions = await db.transactions.find({
+        "user_id": user_id,
+        "amount": amount,
+        "date": {"$gte": start_time}
+    }).to_list(10)
+    
+    return existing_transactions
+
+async def get_user_transaction_patterns(user_id: str, days: int = 30):
+    """Get user's transaction patterns for better categorization"""
+    start_date = datetime.now(timezone.utc) - timedelta(days=days)
+    
+    pipeline = [
+        {"$match": {"user_id": user_id, "date": {"$gte": start_date}}},
+        {"$group": {
+            "_id": {
+                "category": "$category",
+                "type": "$type",
+                "source": "$source"
+            },
+            "count": {"$sum": 1},
+            "avg_amount": {"$avg": "$amount"},
+            "total_amount": {"$sum": "$amount"}
+        }},
+        {"$sort": {"count": -1}}
+    ]
+    
+    return await db.transactions.aggregate(pipeline).to_list(50)

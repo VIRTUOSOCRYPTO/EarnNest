@@ -49,10 +49,10 @@ const Footer = () => {
             {/* Brand Section */}
             <div>
               <div className="flex items-center mb-4">
-                <div className="w-8 h-8 bg-gradient-to-r from-emerald-500 to-blue-600 rounded-lg flex items-center justify-center mr-2">
+                <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center mr-2">
                   <BanknotesIcon className="w-5 h-5 text-white" />
                 </div>
-                <h3 className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-blue-500 bg-clip-text text-transparent">
+                <h3 className="text-xl font-bold text-emerald-400">
                   EarnNest
                 </h3>
               </div>

@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { 
   EnvelopeIcon, 
-  HeartIcon,
-  BanknotesIcon
+  HeartIcon
 } from '@heroicons/react/24/outline';
 import { FooterModal, AboutUsContent, PrivacyContent, SupportContent, TermsContent } from './FooterModel';
 
@@ -49,10 +48,10 @@ const Footer = () => {
             {/* Brand Section */}
             <div>
               <div className="flex items-center mb-4">
-                <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center mr-2">
-                  <BanknotesIcon className="w-5 h-5 text-white" />
+                <div className="w-8 h-8 bg-[#00CC7E] rounded-lg flex items-center justify-center mr-2">
+                  <span className="text-white text-lg font-bold">₹</span>
                 </div>
-                <h3 className="text-xl font-bold text-emerald-400">
+                <h3 className="text-xl font-bold text-[#00CC7E]">
                   EarnNest
                 </h3>
               </div>
@@ -60,8 +59,8 @@ const Footer = () => {
                 Your trusted companion for financial success and wealth building.
               </p>
               <div className="flex items-center text-gray-300 text-sm">
-                <EnvelopeIcon className="w-4 h-4 mr-2 text-emerald-500" />
-                <a href="mailto:tortoor8@gmail.com" className="hover:text-emerald-400 transition-colors">
+                <EnvelopeIcon className="w-4 h-4 mr-2 text-[#00CC7E]" />
+                <a href="mailto:tortoor8@gmail.com" className="hover:text-[#00CC7E] transition-colors">
                   tortoor8@gmail.com
                 </a>
               </div>
@@ -69,7 +68,7 @@ const Footer = () => {
 
             {/* Quick Links */}
             <div>
-              <h4 className="text-lg font-semibold mb-4 text-emerald-400">Quick Links</h4>
+              <h4 className="text-lg font-semibold mb-4 text-[#00CC7E]">Quick Links</h4>
               <div className="grid grid-cols-2 gap-2">
                 {quickLinks.map((link, index) => (
                   <button
@@ -85,10 +84,10 @@ const Footer = () => {
 
             {/* Contact Support */}
             <div>
-              <h4 className="text-lg font-semibold mb-4 text-emerald-400">Need Help?</h4>
+              <h4 className="text-lg font-semibold mb-4 text-[#00CC7E]">Need Help?</h4>
               <a 
                 href="mailto:tortoor8@gmail.com?subject=EarnNest%20Support%20Request"
-                className="inline-flex items-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors text-sm font-medium"
+                className="inline-flex items-center px-4 py-2 bg-[#00CC7E] hover:bg-[#00BB70] text-white rounded-lg transition-colors text-sm font-medium"
               >
                 <EnvelopeIcon className="w-4 h-4 mr-2" />
                 Contact Support

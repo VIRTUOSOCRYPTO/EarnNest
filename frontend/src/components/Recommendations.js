@@ -20,7 +20,7 @@ const API = `${BACKEND_URL}/api`;
 const Recommendations = () => {
   const [allSuggestions, setAllSuggestions] = useState({});
   const [loading, setLoading] = useState(true);
-  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedCategory, setSelectedCategory] = useState('Food');
   const [emergencyTypes, setEmergencyTypes] = useState([]);
   const [selectedEmergency, setSelectedEmergency] = useState('');
   const [hospitals, setHospitals] = useState([]);
@@ -28,16 +28,20 @@ const Recommendations = () => {
   const [userLocation, setUserLocation] = useState('');
 
   const categoryIcons = {
-    'Movies': FilmIcon,
-    'Transportation': TruckIcon,
-    'Shopping': ShoppingBagIcon,
     'Food': ShoppingCartIcon,
-    'Groceries': ShoppingCartIcon,
+    'Transportation': TruckIcon,
+    'Books': BookOpenIcon,
     'Entertainment': PlayIcon,
-    'Books': BookOpenIcon
+    'Rent': ShoppingBagIcon,
+    'Utilities': ExclamationTriangleIcon,
+    'Movies': FilmIcon,
+    'Shopping': ShoppingBagIcon,
+    'Groceries': ShoppingCartIcon,
+    'Subscriptions': StarIcon,
+    'Emergency Fund': ExclamationTriangleIcon
   };
 
-  const categories = ['All', 'Movies', 'Transportation', 'Shopping', 'Food', 'Groceries', 'Entertainment', 'Books'];
+  const categories = ['Food', 'Transportation', 'Books', 'Entertainment', 'Rent', 'Utilities', 'Movies', 'Shopping', 'Groceries', 'Subscriptions', 'Emergency Fund'];
 
   useEffect(() => {
     fetchAllSuggestions();
@@ -61,8 +65,27 @@ const Recommendations = () => {
 
   const fetchAllSuggestions = async () => {
     try {
-      const response = await axios.get(`${API}/categories/all-suggestions`);
-      setAllSuggestions(response.data.categories || {});
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      
+      const categoryPromises = categories.filter(cat => cat !== 'Emergency Fund').map(async (category) => {
+        try {
+          const response = await axios.get(`${API}/app-suggestions/${category.toLowerCase()}`, { headers });
+          return { category, apps: response.data.apps || [] };
+        } catch (error) {
+          console.error(`Error fetching suggestions for ${category}:`, error);
+          return { category, apps: [] };
+        }
+      });
+
+      const results = await Promise.all(categoryPromises);
+      const suggestions = {};
+      
+      results.forEach(({ category, apps }) => {
+        suggestions[category] = apps;
+      });
+
+      setAllSuggestions(suggestions);
     } catch (error) {
       console.error('Error fetching suggestions:', error);
     } finally {
@@ -72,7 +95,9 @@ const Recommendations = () => {
 
   const fetchEmergencyTypes = async () => {
     try {
-      const response = await axios.get(`${API}/emergency/types`);
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const response = await axios.get(`${API}/emergency-types`, { headers });
       setEmergencyTypes(response.data.emergency_types || []);
     } catch (error) {
       console.error('Error fetching emergency types:', error);
@@ -84,13 +109,18 @@ const Recommendations = () => {
     
     setLoadingHospitals(true);
     try {
-      const params = {
-        emergency_type: emergencyType,
-        city: 'Mumbai', // Could be enhanced with user's actual city
-        limit: 8
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      
+      const locationData = {
+        latitude: 12.9716, // Default to Bangalore coordinates
+        longitude: 77.5946
       };
       
-      const response = await axios.get(`${API}/emergency/hospitals`, { params });
+      const response = await axios.post(`${API}/emergency-hospitals`, {
+        ...locationData,
+        emergency_type: emergencyType
+      }, { headers });
       setHospitals(response.data.hospitals || []);
     } catch (error) {
       console.error('Error fetching hospitals:', error);
@@ -102,13 +132,16 @@ const Recommendations = () => {
 
   const handleSuggestionClick = async (suggestion, category) => {
     try {
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      
       // Track click
       await axios.post(`${API}/track-suggestion-click`, {
         category: category,
         suggestion_name: suggestion.name,
         suggestion_url: suggestion.url,
         user_location: userLocation
-      });
+      }, { headers });
       
       // Open in new tab
       window.open(suggestion.url, '_blank', 'noopener,noreferrer');
@@ -128,9 +161,9 @@ const Recommendations = () => {
     window.location.href = `tel:${phone}`;
   };
 
-  const filteredCategories = selectedCategory === 'All' 
-    ? Object.keys(allSuggestions)
-    : [selectedCategory].filter(cat => allSuggestions[cat]);
+  const filteredCategories = [selectedCategory].filter(cat => 
+    cat === 'Emergency Fund' || allSuggestions[cat]
+  );
 
   if (loading) {
     return (
@@ -170,6 +203,10 @@ const Recommendations = () => {
       {/* Regular Category Suggestions */}
       <div className="space-y-8">
         {filteredCategories.map((category) => {
+          if (category === 'Emergency Fund') {
+            return null; // Emergency Fund is handled separately below
+          }
+          
           const Icon = categoryIcons[category];
           const suggestions = allSuggestions[category] || [];
           
@@ -191,18 +228,39 @@ const Recommendations = () => {
                       onClick={() => handleSuggestionClick(suggestion, category)}
                       className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-emerald-300 hover:shadow-md transition-all duration-200 text-left group"
                     >
-                      <div className="flex-shrink-0">
-                        <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-blue-500 rounded-lg flex items-center justify-center text-white font-bold">
-                          {suggestion.name.charAt(0)}
-                        </div>
+                      <div className="flex-shrink-0 relative">
+                        {suggestion.logo ? (
+                          <div className="w-12 h-12 rounded-lg bg-white p-1 flex items-center justify-center">
+                            <img 
+                              src={suggestion.logo} 
+                              alt={suggestion.name}
+                              className="max-w-full max-h-full object-contain"
+                              onError={(e) => {
+                                e.target.parentElement.innerHTML = `<div class="w-10 h-10 bg-gradient-to-br from-emerald-500 to-blue-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">${suggestion.name.charAt(0)}</div>`;
+                              }}
+                              onLoad={(e) => {
+                                // Ensure the image loaded successfully
+                                if (e.target.naturalWidth === 0) {
+                                  e.target.parentElement.innerHTML = `<div class="w-10 h-10 bg-gradient-to-br from-emerald-500 to-blue-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">${suggestion.name.charAt(0)}</div>`;
+                                }
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-blue-500 rounded-lg flex items-center justify-center text-white font-bold">
+                            {suggestion.name.charAt(0)}
+                          </div>
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <h3 className="font-semibold text-gray-900 truncate">
                             {suggestion.name}
                           </h3>
-                          {suggestion.is_popular && (
-                            <StarIcon className="w-4 h-4 text-yellow-400 fill-current" />
+                          {suggestion.price_comparison && (
+                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                              Compare Prices
+                            </span>
                           )}
                         </div>
                         {suggestion.description && (
@@ -210,20 +268,10 @@ const Recommendations = () => {
                             {suggestion.description}
                           </p>
                         )}
-                        {suggestion.offers && (
-                          <p className="text-sm text-emerald-600 font-medium mt-1">
-                            {suggestion.offers}
-                          </p>
-                        )}
                         <div className="flex items-center gap-2 mt-2">
                           <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded">
                             {suggestion.type}
                           </span>
-                          {suggestion.click_count > 0 && (
-                            <span className="text-xs text-gray-500">
-                              {suggestion.click_count} clicks
-                            </span>
-                          )}
                         </div>
                       </div>
                       <LinkIcon className="w-5 h-5 text-gray-400 group-hover:text-emerald-600 transition-colors" />
@@ -239,7 +287,8 @@ const Recommendations = () => {
       </div>
 
       {/* Emergency Fund Special Section */}
-      <div className="bg-gradient-to-r from-red-50 to-orange-50 rounded-xl shadow-lg p-6 border border-red-200">
+      {selectedCategory === 'Emergency Fund' && (
+        <div className="bg-gradient-to-r from-red-50 to-orange-50 rounded-xl shadow-lg p-6 border border-red-200">
         <div className="flex items-center gap-3 mb-6">
           <ExclamationTriangleIcon className="w-6 h-6 text-red-600" />
           <h2 className="text-xl font-semibold text-gray-900">Emergency Fund - Hospital Finder</h2>
@@ -356,7 +405,8 @@ const Recommendations = () => {
             </div>
           )}
         </div>
-      </div>
+        </div>
+      )}
     </div>
   );
 };

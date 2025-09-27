@@ -4,7 +4,7 @@ import {
   HeartIcon,
   BanknotesIcon
 } from '@heroicons/react/24/outline';
-import { FooterModal, AboutUsContent, PrivacyContent, SupportContent, TermsContent } from './FooterModal';
+import { FooterModal, AboutUsContent, PrivacyContent, SupportContent, TermsContent } from './FooterModel';
 
 const Footer = () => {
   const currentYear = new Date().getFullYear();

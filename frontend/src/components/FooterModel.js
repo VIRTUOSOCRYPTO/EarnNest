@@ -1,5 +1,5 @@
 import React from 'react';
-import { XMarkIcon, BanknotesIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon } from '@heroicons/react/24/outline';
 
 const FooterModal = ({ isOpen, onClose, title, children }) => {
   if (!isOpen) return null;
@@ -10,11 +10,11 @@ const FooterModal = ({ isOpen, onClose, title, children }) => {
         {/* Header */}
         <div className="bg-gradient-to-r from-emerald-50 to-blue-50 px-6 py-4 border-b border-gray-200 flex items-center justify-between">
           <div className="flex items-center">
-            <div className="w-8 h-8 bg-gradient-to-r from-emerald-500 to-blue-600 rounded-lg flex items-center justify-center mr-3">
-              <BanknotesIcon className="w-5 h-5 text-white" />
+            <div className="w-8 h-8 bg-[#00CC7E] rounded-lg flex items-center justify-center mr-3">
+              <span className="text-white text-lg font-bold">₹</span>
             </div>
             <div>
-              <h2 className="text-xl font-bold bg-gradient-to-r from-emerald-600 to-blue-700 bg-clip-text text-transparent">
+              <h2 className="text-xl font-bold text-[#00CC7E]">
                 {title}
               </h2>
               <p className="text-sm text-gray-600">EarnNest - Your Financial Companion</p>
@@ -41,10 +41,10 @@ const AboutUsContent = () => (
   <div className="space-y-6">
     <div className="text-center mb-8">
       <div className="flex items-center justify-center mb-4">
-        <div className="w-16 h-16 bg-gradient-to-r from-emerald-500 to-blue-600 rounded-lg flex items-center justify-center mr-4">
-          <BanknotesIcon className="w-10 h-10 text-white" />
+        <div className="w-16 h-16 bg-[#00CC7E] rounded-lg flex items-center justify-center mr-4">
+          <span className="text-white text-3xl font-bold">₹</span>
         </div>
-        <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-blue-700 bg-clip-text text-transparent">
+        <h1 className="text-3xl font-bold text-[#00CC7E]">
           EarnNest
         </h1>
       </div>
@@ -110,7 +110,7 @@ const AboutUsContent = () => (
     <div className="text-center bg-gray-50 p-6 rounded-lg">
       <h3 className="text-lg font-semibold text-gray-800 mb-2">Ready to Start Your Financial Journey?</h3>
       <p className="text-gray-600 mb-4">Join thousands of users who are already building their financial future with EarnNest.</p>
-      <a href="mailto:tortoor8@gmail.com" className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-emerald-500 to-blue-600 text-white rounded-lg hover:from-emerald-600 hover:to-blue-700 transition-colors font-medium">
+      <a href="mailto:tortoor8@gmail.com" className="inline-flex items-center px-6 py-3 bg-[#00CC7E] text-white rounded-lg hover:bg-[#00BB70] transition-colors font-medium">
         Get in Touch
       </a>
     </div>
@@ -195,21 +195,21 @@ const PrivacyContent = () => (
         <h3 className="text-xl font-semibold text-gray-800 mb-3">Your Rights</h3>
         <div className="space-y-3">
           <div className="flex items-start space-x-3">
-            <span className="text-emerald-600 font-bold">•</span>
+            <span className="text-[#00CC7E] font-bold">•</span>
             <div>
               <h4 className="font-semibold text-gray-800">Access & Portability</h4>
               <p className="text-gray-600 text-sm">Request a copy of your personal data at any time</p>
             </div>
           </div>
           <div className="flex items-start space-x-3">
-            <span className="text-emerald-600 font-bold">•</span>
+            <span className="text-[#00CC7E] font-bold">•</span>
             <div>
               <h4 className="font-semibold text-gray-800">Correction & Update</h4>
               <p className="text-gray-600 text-sm">Update or correct your information through your profile</p>
             </div>
           </div>
           <div className="flex items-start space-x-3">
-            <span className="text-emerald-600 font-bold">•</span>
+            <span className="text-[#00CC7E] font-bold">•</span>
             <div>
               <h4 className="font-semibold text-gray-800">Deletion</h4>
               <p className="text-gray-600 text-sm">Request deletion of your account and associated data</p>
@@ -221,7 +221,7 @@ const PrivacyContent = () => (
 
     <div className="border-t pt-6 text-center">
       <p className="text-gray-600 mb-4">Questions about our privacy practices?</p>
-      <a href="mailto:tortoor8@gmail.com?subject=Privacy%20Policy%20Question" className="text-emerald-600 hover:text-emerald-700 font-medium">
+      <a href="mailto:tortoor8@gmail.com?subject=Privacy%20Policy%20Question" className="text-[#00CC7E] hover:text-[#00BB70] font-medium">
         Contact us at tortoor8@gmail.com
       </a>
     </div>
@@ -242,8 +242,8 @@ const SupportContent = () => (
           <div className="flex items-center space-x-3">
             <span className="text-2xl">📧</span>
             <div>
-              <h4 className="font-semibold text-emerald-700">Email Support</h4>
-              <a href="mailto:tortoor8@gmail.com" className="text-emerald-600 hover:text-emerald-700">
+              <h4 className="font-semibold text-[#00CC7E]">Email Support</h4>
+              <a href="mailto:tortoor8@gmail.com" className="text-[#00CC7E] hover:text-[#00BB70]">
                 tortoor8@gmail.com
               </a>
             </div>
@@ -251,15 +251,15 @@ const SupportContent = () => (
           <div className="flex items-center space-x-3">
             <span className="text-2xl">⏰</span>
             <div>
-              <h4 className="font-semibold text-emerald-700">Response Time</h4>
-              <p className="text-emerald-600">Within 24 hours</p>
+              <h4 className="font-semibold text-[#00CC7E]">Response Time</h4>
+              <p className="text-[#00CC7E]">Within 24 hours</p>
             </div>
           </div>
           <div className="flex items-center space-x-3">
             <span className="text-2xl">🌍</span>
             <div>
-              <h4 className="font-semibold text-emerald-700">Availability</h4>
-              <p className="text-emerald-600">24/7 Email Support</p>
+              <h4 className="font-semibold text-[#00CC7E]">Availability</h4>
+              <p className="text-[#00CC7E]">24/7 Email Support</p>
             </div>
           </div>
         </div>
@@ -317,7 +317,7 @@ const SupportContent = () => (
       <p className="text-gray-600 mb-4">Our support team is always ready to assist you with any questions or concerns.</p>
       <a 
         href="mailto:tortoor8@gmail.com?subject=EarnNest%20Support%20Request"
-        className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-emerald-500 to-blue-600 text-white rounded-lg hover:from-emerald-600 hover:to-blue-700 transition-colors font-medium"
+        className="inline-flex items-center px-6 py-3 bg-[#00CC7E] text-white rounded-lg hover:bg-[#00BB70] transition-colors font-medium"
       >
         Contact Support Team
       </a>
@@ -444,7 +444,7 @@ const TermsContent = () => (
 
     <div className="border-t pt-6 text-center">
       <p className="text-gray-600 mb-4">Questions about these terms?</p>
-      <a href="mailto:tortoor8@gmail.com?subject=Terms%20of%20Service%20Question" className="text-emerald-600 hover:text-emerald-700 font-medium">
+      <a href="mailto:tortoor8@gmail.com?subject=Terms%20of%20Service%20Question" className="text-[#00CC7E] hover:text-[#00BB70] font-medium">
         Contact us at tortoor8@gmail.com
       </a>
     </div>

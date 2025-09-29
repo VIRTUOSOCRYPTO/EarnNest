@@ -2054,7 +2054,7 @@ async def get_emergency_hospitals_endpoint(
     emergency_type: str,
     user_id: str = Depends(get_current_user)
 ):
-    """Get nearby hospitals based on location and emergency type"""
+    """Get nearby hospitals based on location and emergency type with enhanced specialty matching"""
     try:
         latitude = location_data.get("latitude")
         longitude = location_data.get("longitude")
@@ -2062,19 +2062,95 @@ async def get_emergency_hospitals_endpoint(
         if not latitude or not longitude:
             raise HTTPException(status_code=400, detail="Location coordinates required")
         
-        # For demo purposes, return sample hospitals with emergency type specific recommendations
-        # In production, you would integrate with Google Places API or similar service
-        
-        specialty_mapping = {
-            "medical": "Multi-specialty hospitals with emergency care",
-            "family": "General hospitals with 24/7 emergency services", 
-            "vehicle": "Trauma centers for accident victims",
-            "home": "General hospitals for injury treatment",
-            "technology": "Eye care hospitals for vision emergencies",
-            "other": "Multi-specialty emergency care centers"
+        # Enhanced specialty mapping for different accident and medical emergency types
+        accident_specialty_mapping = {
+            "road accident": {
+                "primary_specialties": ["Trauma Surgery", "Orthopedics", "Neurosurgery"],
+                "secondary_specialties": ["Emergency Medicine", "Plastic Surgery", "ICU"],
+                "description": "Trauma centers specialized in road accident injuries"
+            },
+            "workplace accident": {
+                "primary_specialties": ["Occupational Medicine", "Trauma Surgery", "Orthopedics"],
+                "secondary_specialties": ["Emergency Medicine", "Rehabilitation"],
+                "description": "Hospitals with occupational injury expertise"
+            },
+            "sports injury": {
+                "primary_specialties": ["Sports Medicine", "Orthopedics", "Physiotherapy"],
+                "secondary_specialties": ["Emergency Medicine", "Rehabilitation"],
+                "description": "Sports medicine and orthopedic specialists"
+            },
+            "fall injury": {
+                "primary_specialties": ["Orthopedics", "Trauma Surgery", "Neurology"],
+                "secondary_specialties": ["Emergency Medicine", "Geriatrics"],
+                "description": "Specialists for fall-related injuries"
+            }
         }
         
-        sample_hospitals = [
+        medical_specialty_mapping = {
+            "cardiac": {
+                "primary_specialties": ["Cardiology", "Cardiac Surgery", "Interventional Cardiology"],
+                "secondary_specialties": ["Emergency Medicine", "ICU", "Anesthesiology"],
+                "description": "Cardiac emergency specialists and interventional care"
+            },
+            "pediatric": {
+                "primary_specialties": ["Pediatrics", "Pediatric Emergency", "NICU"],
+                "secondary_specialties": ["Pediatric Surgery", "Child Psychology"],
+                "description": "Specialized pediatric emergency and child care"
+            },
+            "orthopedic": {
+                "primary_specialties": ["Orthopedics", "Orthopedic Surgery", "Sports Medicine"],
+                "secondary_specialties": ["Emergency Medicine", "Physiotherapy"],
+                "description": "Bone, joint and musculoskeletal specialists"
+            },
+            "neurological": {
+                "primary_specialties": ["Neurology", "Neurosurgery", "Stroke Care"],
+                "secondary_specialties": ["Emergency Medicine", "ICU", "Rehabilitation"],
+                "description": "Brain and nervous system emergency specialists"
+            },
+            "respiratory": {
+                "primary_specialties": ["Pulmonology", "Respiratory Medicine", "Critical Care"],
+                "secondary_specialties": ["Emergency Medicine", "ICU", "Anesthesiology"],
+                "description": "Respiratory and lung emergency specialists"
+            },
+            "gastroenterology": {
+                "primary_specialties": ["Gastroenterology", "GI Surgery", "Hepatology"],
+                "secondary_specialties": ["Emergency Medicine", "Endoscopy"],
+                "description": "Digestive system and liver emergency care"
+            },
+            "psychiatric": {
+                "primary_specialties": ["Psychiatry", "Mental Health", "Crisis Intervention"],
+                "secondary_specialties": ["Emergency Medicine", "Psychology"],
+                "description": "Mental health crisis and psychiatric emergency care"
+            },
+            "obstetric": {
+                "primary_specialties": ["Obstetrics", "Gynecology", "Maternity Care"],
+                "secondary_specialties": ["Emergency Medicine", "NICU", "Anesthesiology"],
+                "description": "Pregnancy and childbirth emergency specialists"
+            },
+            "general": {
+                "primary_specialties": ["Emergency Medicine", "General Medicine", "Internal Medicine"],
+                "secondary_specialties": ["ICU", "General Surgery"],
+                "description": "General emergency care and multi-specialty treatment"
+            },
+            "trauma": {
+                "primary_specialties": ["Trauma Surgery", "Emergency Medicine", "Critical Care"],
+                "secondary_specialties": ["Orthopedics", "Neurosurgery", "ICU"],
+                "description": "Comprehensive trauma and critical care centers"
+            }
+        }
+        
+        # Determine the appropriate specialty mapping based on emergency type
+        specialty_info = None
+        if emergency_type in accident_specialty_mapping:
+            specialty_info = accident_specialty_mapping[emergency_type]
+        elif emergency_type in medical_specialty_mapping:
+            specialty_info = medical_specialty_mapping[emergency_type]
+        else:
+            # Default for unknown types
+            specialty_info = medical_specialty_mapping["general"]
+        
+        # Enhanced hospital database with detailed specializations
+        hospital_database = [
             {
                 "name": "Apollo Hospital",
                 "address": "Bannerghatta Road, Bengaluru",
@@ -2082,9 +2158,10 @@ async def get_emergency_hospitals_endpoint(
                 "emergency_phone": "108",
                 "distance": "2.3 km",
                 "rating": 4.5,
-                "speciality": specialty_mapping.get(emergency_type, "General emergency care"),
-                "features": ["24/7 Emergency", "Ambulance Service", "ICU", "Trauma Care"],
-                "estimated_time": "8-12 minutes"
+                "specialties": ["Cardiology", "Cardiac Surgery", "Neurology", "Trauma Surgery", "Emergency Medicine", "ICU", "Interventional Cardiology"],
+                "features": ["24/7 Emergency", "Cardiac Cath Lab", "Trauma Center", "ICU", "Ambulance Service"],
+                "estimated_time": "8-12 minutes",
+                "hospital_type": "Multi-specialty Tertiary Care"
             },
             {
                 "name": "Manipal Hospital",
@@ -2093,9 +2170,10 @@ async def get_emergency_hospitals_endpoint(
                 "emergency_phone": "108",
                 "distance": "3.1 km",
                 "rating": 4.3,
-                "speciality": specialty_mapping.get(emergency_type, "Multi-specialty care"),
-                "features": ["Emergency Ward", "Cardiac Care", "Neurology", "Pediatrics"],
-                "estimated_time": "10-15 minutes"
+                "specialties": ["Orthopedics", "Neurology", "Pediatrics", "Emergency Medicine", "Sports Medicine", "Rehabilitation"],
+                "features": ["Emergency Ward", "Pediatric ICU", "Orthopedic Surgery", "Neuro Care"],
+                "estimated_time": "10-15 minutes",
+                "hospital_type": "Multi-specialty Hospital"
             },
             {
                 "name": "Fortis Hospital",
@@ -2104,9 +2182,10 @@ async def get_emergency_hospitals_endpoint(
                 "emergency_phone": "108",
                 "distance": "4.7 km",
                 "rating": 4.4,
-                "speciality": specialty_mapping.get(emergency_type, "Advanced emergency care"),
-                "features": ["Trauma Center", "Heart Institute", "Emergency Surgery", "Blood Bank"],
-                "estimated_time": "12-18 minutes"
+                "specialties": ["Cardiac Surgery", "Neurosurgery", "Trauma Surgery", "Emergency Medicine", "Critical Care", "Orthopedics"],
+                "features": ["Trauma Center", "Heart Institute", "Emergency Surgery", "Blood Bank", "24/7 ICU"],
+                "estimated_time": "12-18 minutes",
+                "hospital_type": "Super Specialty Hospital"
             },
             {
                 "name": "Narayana Health",
@@ -2115,9 +2194,10 @@ async def get_emergency_hospitals_endpoint(
                 "emergency_phone": "108", 
                 "distance": "5.2 km",
                 "rating": 4.2,
-                "speciality": specialty_mapping.get(emergency_type, "Affordable emergency care"),
-                "features": ["24/7 Emergency", "Ambulance", "Pharmacy", "Laboratory"],
-                "estimated_time": "15-20 minutes"
+                "specialties": ["Emergency Medicine", "General Medicine", "Pediatrics", "Obstetrics", "Gynecology", "Internal Medicine"],
+                "features": ["24/7 Emergency", "Maternity Care", "Pediatric Ward", "Ambulance", "Pharmacy"],
+                "estimated_time": "15-20 minutes",
+                "hospital_type": "General Hospital"
             },
             {
                 "name": "Sakra World Hospital", 
@@ -2126,11 +2206,65 @@ async def get_emergency_hospitals_endpoint(
                 "emergency_phone": "108",
                 "distance": "6.8 km", 
                 "rating": 4.3,
-                "speciality": specialty_mapping.get(emergency_type, "International standard care"),
-                "features": ["Emergency Medicine", "Critical Care", "Diagnostic Center", "Rehabilitation"],
-                "estimated_time": "18-25 minutes"
+                "specialties": ["Emergency Medicine", "Critical Care", "Pulmonology", "Gastroenterology", "Hepatology", "Endoscopy"],
+                "features": ["Emergency Medicine", "Critical Care", "Diagnostic Center", "Rehabilitation", "International Standards"],
+                "estimated_time": "18-25 minutes",
+                "hospital_type": "International Hospital"
+            },
+            {
+                "name": "Bangalore Medical College Hospital",
+                "address": "Fort Area, Bengaluru",
+                "phone": "+91-80-26702468",
+                "emergency_phone": "108",
+                "distance": "7.2 km",
+                "rating": 4.0,
+                "specialties": ["Trauma Surgery", "Occupational Medicine", "Emergency Medicine", "General Surgery", "Orthopedics"],
+                "features": ["Government Hospital", "Trauma Center", "24/7 Emergency", "Affordable Care"],
+                "estimated_time": "20-25 minutes",
+                "hospital_type": "Government Medical College"
+            },
+            {
+                "name": "St. Martha's Hospital",
+                "address": "Nrupathunga Road, Bengaluru",
+                "phone": "+91-80-25598000",
+                "emergency_phone": "108",
+                "distance": "5.8 km",
+                "rating": 4.1,
+                "specialties": ["Psychiatry", "Mental Health", "Crisis Intervention", "Emergency Medicine", "Psychology"],
+                "features": ["Mental Health Ward", "Crisis Intervention", "24/7 Psychiatric Emergency", "Counseling"],
+                "estimated_time": "16-22 minutes",
+                "hospital_type": "Specialty Mental Health Hospital"
             }
         ]
+        
+        # Score and filter hospitals based on specialty match
+        scored_hospitals = []
+        for hospital in hospital_database:
+            match_score = 0
+            hospital_specialties = set(hospital["specialties"])
+            
+            # Calculate match score based on primary and secondary specialties
+            for specialty in specialty_info["primary_specialties"]:
+                if specialty in hospital_specialties:
+                    match_score += 3  # High weight for primary specialties
+            
+            for specialty in specialty_info["secondary_specialties"]:
+                if specialty in hospital_specialties:
+                    match_score += 1  # Lower weight for secondary specialties
+            
+            # Always include hospitals with at least some emergency care capability
+            if match_score > 0 or "Emergency Medicine" in hospital_specialties:
+                hospital_copy = hospital.copy()
+                hospital_copy["specialty_match_score"] = match_score
+                hospital_copy["speciality"] = specialty_info["description"]
+                hospital_copy["matched_specialties"] = [s for s in specialty_info["primary_specialties"] + specialty_info["secondary_specialties"] if s in hospital_specialties]
+                scored_hospitals.append(hospital_copy)
+        
+        # Sort by specialty match score first, then by rating
+        scored_hospitals.sort(key=lambda x: (x["specialty_match_score"], x["rating"]), reverse=True)
+        
+        # Return top 5 most relevant hospitals
+        sample_hospitals = scored_hospitals[:5]
         
         return {
             "hospitals": sample_hospitals,

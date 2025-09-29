@@ -11,14 +11,7 @@ import {
   ShoppingCartIcon,
   ExclamationTriangleIcon,
   MapPinIcon,
-  PhoneIcon,
-  BuildingOffice2Icon,
-  BanknotesIcon,
-  HeartIcon,
-  FireIcon,
-  ShieldCheckIcon,
-  HomeIcon,
-  ClockIcon
+  PhoneIcon
 } from '@heroicons/react/24/outline';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -32,10 +25,6 @@ const Recommendations = () => {
   const [selectedEmergency, setSelectedEmergency] = useState('');
   const [hospitals, setHospitals] = useState([]);
   const [loadingHospitals, setLoadingHospitals] = useState(false);
-  const [userLocation, setUserLocation] = useState('');
-  const [emergencyServices, setEmergencyServices] = useState(null);
-  const [loadingEmergencyServices, setLoadingEmergencyServices] = useState(false);
-  const [locationInfo, setLocationInfo] = useState(null);
 
   const categoryIcons = {
     'Food': ShoppingCartIcon,
@@ -56,71 +45,9 @@ const Recommendations = () => {
   useEffect(() => {
     fetchAllSuggestions();
     fetchEmergencyTypes();
-    getUserLocation();
   }, []);
 
-  const getUserLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const lat = position.coords.latitude;
-          const lng = position.coords.longitude;
-          setUserLocation(`${lat}, ${lng}`);
-          
-          // Automatically fetch emergency services when location is available
-          fetchEmergencyServices(lat, lng);
-        },
-        (error) => {
-          console.log('Location access denied or failed:', error);
-          setUserLocation('Mumbai, Maharashtra'); // Default location
-          // Still try to fetch emergency services for default location
-          fetchEmergencyServices(19.0760, 72.8777); // Mumbai coordinates
-        }
-      );
-    } else {
-      // Fallback for browsers without geolocation
-      setUserLocation('Mumbai, Maharashtra');
-      fetchEmergencyServices(19.0760, 72.8777); // Mumbai coordinates
-    }
-  };
-
-  const fetchEmergencyServices = async (latitude, longitude) => {
-    setLoadingEmergencyServices(true);
-    try {
-      const token = localStorage.getItem('token');
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      
-      const response = await axios.post(`${API}/emergency-services`, {
-        latitude: latitude,
-        longitude: longitude
-      }, { headers });
-      
-      setEmergencyServices(response.data.emergency_services);
-      setLocationInfo(response.data.location);
-    } catch (error) {
-      console.error('Error fetching emergency services:', error);
-      // Fallback to static emergency services
-      setEmergencyServices({
-        hospitals: [],
-        police_stations: [],
-        atms_banks: [],
-        pharmacies: [],
-        gas_stations: [],
-        fire_stations: [],
-        emergency_shelters: [],
-        emergency_contacts: {
-          emergency_numbers: [
-            {"service": "Police", "number": "100", "description": "Police Emergency"},
-            {"service": "Fire", "number": "101", "description": "Fire Emergency"},
-            {"service": "Ambulance", "number": "102", "description": "Medical Emergency"},
-            {"service": "Disaster Management", "number": "108", "description": "Emergency Response"}
-          ]
-        }
-      });
-    } finally {
-      setLoadingEmergencyServices(false);
-    }
-  };
+  // Emergency services functions removed
 
   const fetchAllSuggestions = async () => {
     try {
@@ -199,7 +126,7 @@ const Recommendations = () => {
         category: category,
         suggestion_name: suggestion.name,
         suggestion_url: suggestion.url,
-        user_location: userLocation
+        user_location: null
       }, { headers });
       
       // Open in new tab
@@ -262,204 +189,7 @@ const Recommendations = () => {
         <p className="text-gray-600">Discover the best apps and websites for your expense categories</p>
       </div>
 
-      {/* Emergency Services Section - Auto-populated based on location */}
-      {emergencyServices && (
-        <div className="bg-gradient-to-r from-red-50 to-orange-50 rounded-xl shadow-lg p-6 border border-red-200">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <ExclamationTriangleIcon className="w-6 h-6 text-red-600" />
-              <h2 className="text-xl font-semibold text-gray-900">Emergency Services Near You</h2>
-              {locationInfo && (
-                <span className="text-sm bg-red-100 text-red-700 px-3 py-1 rounded-full">
-                  📍 {locationInfo.area}, {locationInfo.city}
-                </span>
-              )}
-            </div>
-            {loadingEmergencyServices && (
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-600"></div>
-            )}
-          </div>
-
-          {/* Emergency Numbers */}
-          {emergencyServices.emergency_contacts?.emergency_numbers && (
-            <div className="mb-6">
-              <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                <PhoneIcon className="w-5 h-5 text-red-600" />
-                Emergency Hotlines
-              </h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {emergencyServices.emergency_contacts.emergency_numbers.map((contact, index) => (
-                  <button
-                    key={index}
-                    onClick={() => window.location.href = `tel:${contact.number}`}
-                    className="bg-white p-3 rounded-lg border border-red-200 hover:border-red-400 transition-colors text-center"
-                  >
-                    <div className="text-lg font-bold text-red-600">{contact.number}</div>
-                    <div className="text-xs text-gray-600">{contact.service}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Emergency Services Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Hospitals */}
-            {emergencyServices.hospitals && emergencyServices.hospitals.length > 0 && (
-              <div className="bg-white p-4 rounded-lg border border-gray-200">
-                <div className="flex items-center gap-2 mb-3">
-                  <HeartIcon className="w-5 h-5 text-red-600" />
-                  <h4 className="font-semibold text-gray-900">Hospitals</h4>
-                </div>
-                {emergencyServices.hospitals.slice(0, 2).map((hospital, index) => (
-                  <div key={index} className="mb-2 pb-2 border-b border-gray-100 last:border-b-0">
-                    <div className="text-sm font-medium text-gray-900">{hospital.name}</div>
-                    <div className="text-xs text-gray-600">{hospital.distance}</div>
-                    <button
-                      onClick={() => window.location.href = `tel:${hospital.phone}`}
-                      className="text-xs text-blue-600 hover:text-blue-800"
-                    >
-                      📞 {hospital.phone}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Police Stations */}
-            {emergencyServices.police_stations && emergencyServices.police_stations.length > 0 && (
-              <div className="bg-white p-4 rounded-lg border border-gray-200">
-                <div className="flex items-center gap-2 mb-3">
-                  <ShieldCheckIcon className="w-5 h-5 text-blue-600" />
-                  <h4 className="font-semibold text-gray-900">Police</h4>
-                </div>
-                {emergencyServices.police_stations.slice(0, 2).map((station, index) => (
-                  <div key={index} className="mb-2 pb-2 border-b border-gray-100 last:border-b-0">
-                    <div className="text-sm font-medium text-gray-900">{station.name}</div>
-                    <div className="text-xs text-gray-600">{station.distance}</div>
-                    <button
-                      onClick={() => window.location.href = `tel:${station.phone}`}
-                      className="text-xs text-blue-600 hover:text-blue-800"
-                    >
-                      📞 {station.phone}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* ATMs & Banks */}
-            {emergencyServices.atms_banks && emergencyServices.atms_banks.length > 0 && (
-              <div className="bg-white p-4 rounded-lg border border-gray-200">
-                <div className="flex items-center gap-2 mb-3">
-                  <BanknotesIcon className="w-5 h-5 text-green-600" />
-                  <h4 className="font-semibold text-gray-900">ATMs & Banks</h4>
-                </div>
-                {emergencyServices.atms_banks.slice(0, 2).map((bank, index) => (
-                  <div key={index} className="mb-2 pb-2 border-b border-gray-100 last:border-b-0">
-                    <div className="text-sm font-medium text-gray-900">{bank.name}</div>
-                    <div className="text-xs text-gray-600">{bank.distance}</div>
-                    <div className="text-xs text-blue-600">{bank.type}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Pharmacies */}
-            {emergencyServices.pharmacies && emergencyServices.pharmacies.length > 0 && (
-              <div className="bg-white p-4 rounded-lg border border-gray-200">
-                <div className="flex items-center gap-2 mb-3">
-                  <BuildingOffice2Icon className="w-5 h-5 text-purple-600" />
-                  <h4 className="font-semibold text-gray-900">Pharmacies</h4>
-                </div>
-                {emergencyServices.pharmacies.slice(0, 2).map((pharmacy, index) => (
-                  <div key={index} className="mb-2 pb-2 border-b border-gray-100 last:border-b-0">
-                    <div className="text-sm font-medium text-gray-900">{pharmacy.name}</div>
-                    <div className="text-xs text-gray-600">{pharmacy.distance}</div>
-                    <button
-                      onClick={() => window.location.href = `tel:${pharmacy.phone}`}
-                      className="text-xs text-blue-600 hover:text-blue-800"
-                    >
-                      📞 {pharmacy.phone}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Additional Services Row */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-            {/* Gas Stations */}
-            {emergencyServices.gas_stations && emergencyServices.gas_stations.length > 0 && (
-              <div className="bg-white p-4 rounded-lg border border-gray-200">
-                <div className="flex items-center gap-2 mb-3">
-                  <TruckIcon className="w-5 h-5 text-yellow-600" />
-                  <h4 className="font-semibold text-gray-900">Gas Stations</h4>
-                </div>
-                {emergencyServices.gas_stations.slice(0, 2).map((station, index) => (
-                  <div key={index} className="mb-2 pb-2 border-b border-gray-100 last:border-b-0">
-                    <div className="text-sm font-medium text-gray-900">{station.name}</div>
-                    <div className="text-xs text-gray-600">{station.distance}</div>
-                    <div className="text-xs text-yellow-600">⛽ {station.fuel_types?.join(', ')}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Fire Stations */}
-            {emergencyServices.fire_stations && emergencyServices.fire_stations.length > 0 && (
-              <div className="bg-white p-4 rounded-lg border border-gray-200">
-                <div className="flex items-center gap-2 mb-3">
-                  <FireIcon className="w-5 h-5 text-orange-600" />
-                  <h4 className="font-semibold text-gray-900">Fire Stations</h4>
-                </div>
-                {emergencyServices.fire_stations.slice(0, 2).map((station, index) => (
-                  <div key={index} className="mb-2 pb-2 border-b border-gray-100 last:border-b-0">
-                    <div className="text-sm font-medium text-gray-900">{station.name}</div>
-                    <div className="text-xs text-gray-600">{station.distance}</div>
-                    <button
-                      onClick={() => window.location.href = `tel:${station.phone}`}
-                      className="text-xs text-blue-600 hover:text-blue-800"
-                    >
-                      📞 {station.phone}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Emergency Shelters */}
-            {emergencyServices.emergency_shelters && emergencyServices.emergency_shelters.length > 0 && (
-              <div className="bg-white p-4 rounded-lg border border-gray-200">
-                <div className="flex items-center gap-2 mb-3">
-                  <HomeIcon className="w-5 h-5 text-indigo-600" />
-                  <h4 className="font-semibold text-gray-900">Emergency Shelters</h4>
-                </div>
-                {emergencyServices.emergency_shelters.slice(0, 2).map((shelter, index) => (
-                  <div key={index} className="mb-2 pb-2 border-b border-gray-100 last:border-b-0">
-                    <div className="text-sm font-medium text-gray-900">{shelter.name}</div>
-                    <div className="text-xs text-gray-600">{shelter.distance}</div>
-                    <button
-                      onClick={() => window.location.href = `tel:${shelter.phone}`}
-                      className="text-xs text-blue-600 hover:text-blue-800"
-                    >
-                      📞 {shelter.phone}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="mt-4 text-center">
-            <p className="text-xs text-gray-500">
-              <ClockIcon className="w-4 h-4 inline mr-1" />
-              Emergency services updated based on your location. In case of emergency, call 108 immediately.
-            </p>
-          </div>
-        </div>
-      )}
+      {/* Emergency Services Section Removed */}
 
       {/* Category Filter */}
       <div className="flex flex-wrap gap-2 justify-center">

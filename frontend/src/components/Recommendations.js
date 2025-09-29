@@ -25,6 +25,11 @@ const Recommendations = () => {
   const [selectedEmergency, setSelectedEmergency] = useState('');
   const [hospitals, setHospitals] = useState([]);
   const [loadingHospitals, setLoadingHospitals] = useState(false);
+  const [userLocation, setUserLocation] = useState(null);
+  const [locationError, setLocationError] = useState('');
+  const [manualLocation, setManualLocation] = useState('');
+  const [showManualLocation, setShowManualLocation] = useState(false);
+  const [nearbyPlaces, setNearbyPlaces] = useState([]);
 
   const categoryIcons = {
     'Food': ShoppingCartIcon,
@@ -42,12 +47,334 @@ const Recommendations = () => {
 
   const categories = ['Food', 'Transportation', 'Books', 'Entertainment', 'Rent', 'Utilities', 'Movies', 'Shopping', 'Groceries', 'Subscriptions', 'Emergency Fund'];
 
+  // Emergency categories with their place types
+  const emergencyCategories = [
+    {
+      id: 'fire_emergency',
+      name: 'Fire Emergency',
+      icon: '🔥',
+      description: 'Fire stations, emergency shelters',
+      placeTypes: ['fire_station', 'emergency_shelter']
+    },
+    {
+      id: 'crime_security',
+      name: 'Crime/Security',
+      icon: '🚔',
+      description: 'Police stations, security posts',
+      placeTypes: ['police', 'security']
+    },
+    {
+      id: 'accident',
+      name: 'Accident',
+      icon: '🚗',
+      description: 'Hospitals, trauma centers',
+      placeTypes: ['hospital', 'clinic', 'emergency']
+    },
+    {
+      id: 'mental_health',
+      name: 'Mental Health Crisis',
+      icon: '🧠',
+      description: 'Counseling centers, helplines',
+      placeTypes: ['therapist', 'counseling', 'mental_health']
+    },
+    {
+      id: 'natural_disaster',
+      name: 'Natural Disaster',
+      icon: '🌪️',
+      description: 'Relief centers, shelters',
+      placeTypes: ['emergency_shelter', 'relief_center', 'evacuation']
+    },
+    {
+      id: 'medical_emergency',
+      name: 'Medical Emergency',
+      icon: '🏥',
+      description: 'Hospitals, pharmacies, clinics',
+      placeTypes: ['hospital', 'pharmacy', 'clinic', 'emergency']
+    }
+  ];
+
   useEffect(() => {
     fetchAllSuggestions();
-    fetchEmergencyTypes();
+    // Initialize emergency categories
+    setEmergencyTypes(emergencyCategories);
   }, []);
 
   // Emergency services functions removed
+
+  // Get user's current location
+  const getUserLocation = async () => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error('Geolocation is not supported by this browser'));
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const location = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy
+          };
+          setUserLocation(location);
+          setLocationError('');
+          resolve(location);
+        },
+        (error) => {
+          let errorMessage = '';
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              errorMessage = 'Location access denied. Please enable location or enter manually.';
+              break;
+            case error.POSITION_UNAVAILABLE:
+              errorMessage = 'Location information unavailable.';
+              break;
+            case error.TIMEOUT:
+              errorMessage = 'Location request timed out.';
+              break;
+            default:
+              errorMessage = 'An unknown error occurred while retrieving location.';
+              break;
+          }
+          setLocationError(errorMessage);
+          setShowManualLocation(true);
+          reject(error);
+        },
+        { 
+          enableHighAccuracy: true, 
+          timeout: 10000, 
+          maximumAge: 300000 
+        }
+      );
+    });
+  };
+
+  // Geocode manual location input
+  const geocodeManualLocation = async (locationString) => {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(locationString)}&format=json&limit=1`
+      );
+      const data = await response.json();
+      
+      if (data && data.length > 0) {
+        const location = {
+          latitude: parseFloat(data[0].lat),
+          longitude: parseFloat(data[0].lon),
+          address: data[0].display_name
+        };
+        setUserLocation(location);
+        setLocationError('');
+        setShowManualLocation(false);
+        return location;
+      } else {
+        throw new Error('Location not found');
+      }
+    } catch (error) {
+      setLocationError('Failed to find location. Please try a more specific address.');
+      throw error;
+    }
+  };
+
+  // Fetch nearby places using OpenStreetMap Overpass API
+  const fetchNearbyPlaces = async (category, location = null) => {
+    const currentLocation = location || userLocation;
+    if (!currentLocation) {
+      setLocationError('Location required to find nearby places');
+      return;
+    }
+
+    setLoadingHospitals(true);
+    setNearbyPlaces([]);
+
+    try {
+      const categoryConfig = emergencyCategories.find(cat => cat.id === category);
+      if (!categoryConfig) return;
+
+      // Build Overpass query for different place types
+      const placeTypes = categoryConfig.placeTypes;
+      const radius = 5000; // 5km radius
+      
+      let overpassQuery = '[out:json][timeout:25];(';
+      
+      placeTypes.forEach(placeType => {
+        let amenityTag = '';
+        switch (placeType) {
+          case 'fire_station':
+            amenityTag = 'amenity=fire_station';
+            break;
+          case 'emergency_shelter':
+            amenityTag = 'amenity=shelter';
+            break;
+          case 'police':
+            amenityTag = 'amenity=police';
+            break;
+          case 'hospital':
+            amenityTag = 'amenity=hospital';
+            break;
+          case 'clinic':
+            amenityTag = 'amenity=clinic';
+            break;
+          case 'pharmacy':
+            amenityTag = 'amenity=pharmacy';
+            break;
+          case 'emergency':
+            amenityTag = 'emergency=yes';
+            break;
+          default:
+            amenityTag = `amenity=${placeType}`;
+        }
+        
+        overpassQuery += `node[${amenityTag}](around:${radius},${currentLocation.latitude},${currentLocation.longitude});`;
+        overpassQuery += `way[${amenityTag}](around:${radius},${currentLocation.latitude},${currentLocation.longitude});`;
+      });
+      
+      overpassQuery += ');out center meta;';
+
+      const response = await fetch('https://overpass-api.de/api/interpreter', {
+        method: 'POST',
+        body: overpassQuery,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch places from OpenStreetMap');
+      }
+
+      const data = await response.json();
+      
+      // Process and format the results
+      const places = data.elements.map(element => {
+        const lat = element.lat || (element.center && element.center.lat);
+        const lon = element.lon || (element.center && element.center.lon);
+        
+        if (!lat || !lon) return null;
+
+        // Calculate distance
+        const distance = calculateDistance(
+          currentLocation.latitude,
+          currentLocation.longitude,
+          lat,
+          lon
+        );
+
+        return {
+          id: element.id,
+          name: element.tags?.name || `${categoryConfig.name} Service`,
+          address: formatAddress(element.tags),
+          phone: element.tags?.phone || element.tags?.['contact:phone'],
+          emergency_phone: element.tags?.['emergency:phone'] || '108',
+          latitude: lat,
+          longitude: lon,
+          distance: distance,
+          distanceText: distance < 1 ? `${Math.round(distance * 1000)}m` : `${distance.toFixed(1)}km`,
+          type: determineServiceType(element.tags, placeTypes),
+          amenity: element.tags?.amenity,
+          opening_hours: element.tags?.opening_hours,
+          website: element.tags?.website || element.tags?.['contact:website'],
+          rating: null, // OSM doesn't have ratings
+          tags: element.tags
+        };
+      }).filter(place => place !== null);
+
+      // Sort by distance and limit to 10 results
+      const sortedPlaces = places.sort((a, b) => a.distance - b.distance).slice(0, 10);
+      setNearbyPlaces(sortedPlaces);
+      
+    } catch (error) {
+      console.error('Error fetching nearby places:', error);
+      setLocationError('Failed to find nearby places. Please try again.');
+      setNearbyPlaces([]);
+    } finally {
+      setLoadingHospitals(false);
+    }
+  };
+
+  // Helper function to calculate distance between two coordinates
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // Radius of Earth in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
+  // Helper function to format address from OSM tags
+  const formatAddress = (tags) => {
+    if (!tags) return 'Address not available';
+    
+    const parts = [];
+    if (tags['addr:housenumber'] && tags['addr:street']) {
+      parts.push(`${tags['addr:housenumber']} ${tags['addr:street']}`);
+    } else if (tags['addr:street']) {
+      parts.push(tags['addr:street']);
+    }
+    
+    if (tags['addr:city']) parts.push(tags['addr:city']);
+    if (tags['addr:state']) parts.push(tags['addr:state']);
+    if (tags['addr:postcode']) parts.push(tags['addr:postcode']);
+    
+    return parts.length > 0 ? parts.join(', ') : 'Address not available';
+  };
+
+  // Helper function to determine service type from tags
+  const determineServiceType = (tags, placeTypes) => {
+    if (!tags) return 'Emergency Service';
+    
+    if (tags.amenity === 'fire_station') return 'Fire Station';
+    if (tags.amenity === 'police') return 'Police Station';
+    if (tags.amenity === 'hospital') return 'Hospital';
+    if (tags.amenity === 'clinic') return 'Clinic';
+    if (tags.amenity === 'pharmacy') return 'Pharmacy';
+    if (tags.amenity === 'shelter') return 'Emergency Shelter';
+    if (tags.emergency === 'yes') return 'Emergency Service';
+    
+    return 'Emergency Service';
+  };
+
+  // Navigate to place using Google Maps or OpenStreetMap
+  const navigateToPlace = (place) => {
+    const { latitude, longitude, name } = place;
+    
+    // Try Google Maps first (universal URL scheme)
+    const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}&destination_place_id=${encodeURIComponent(name)}`;
+    
+    // OpenStreetMap fallback
+    const osmUrl = `https://www.openstreetmap.org/directions?to=${latitude},${longitude}#map=16/${latitude}/${longitude}`;
+    
+    // Check if it's a mobile device for app deep linking
+    const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
+    if (isMobile) {
+      // Try to open in Google Maps app first
+      const appUrl = `google.navigation:q=${latitude},${longitude}`;
+      
+      // Create a temporary link to test if app is available
+      const link = document.createElement('a');
+      link.href = appUrl;
+      
+      setTimeout(() => {
+        // Fallback to web if app didn't open
+        window.open(googleMapsUrl, '_blank');
+      }, 500);
+      
+      // Try to trigger app
+      try {
+        link.click();
+      } catch (e) {
+        window.open(googleMapsUrl, '_blank');
+      }
+    } else {
+      // Desktop: open Google Maps in new tab
+      window.open(googleMapsUrl, '_blank');
+    }
+  };
 
   const fetchAllSuggestions = async () => {
     try {
@@ -79,40 +406,24 @@ const Recommendations = () => {
     }
   };
 
-  const fetchEmergencyTypes = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const response = await axios.get(`${API}/emergency-types`, { headers });
-      setEmergencyTypes(response.data.emergency_types || []);
-    } catch (error) {
-      console.error('Error fetching emergency types:', error);
-    }
-  };
-
-  const fetchHospitals = async (emergencyType) => {
-    if (!emergencyType) return;
+  const handleEmergencySelect = async (emergencyCategory) => {
+    setSelectedEmergency(emergencyCategory.id);
+    setNearbyPlaces([]);
     
-    setLoadingHospitals(true);
     try {
-      const token = localStorage.getItem('token');
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      // Try to get location first
+      let location = userLocation;
+      if (!location) {
+        location = await getUserLocation();
+      }
       
-      const locationData = {
-        latitude: 12.9716, // Default to Bangalore coordinates
-        longitude: 77.5946
-      };
+      // Fetch nearby places for the selected category
+      await fetchNearbyPlaces(emergencyCategory.id, location);
       
-      const response = await axios.post(`${API}/emergency-hospitals`, {
-        ...locationData,
-        emergency_type: emergencyType
-      }, { headers });
-      setHospitals(response.data.hospitals || []);
     } catch (error) {
-      console.error('Error fetching hospitals:', error);
-      setHospitals([]);
-    } finally {
-      setLoadingHospitals(false);
+      console.error('Error getting location:', error);
+      // Show manual location input if geolocation fails
+      setShowManualLocation(true);
     }
   };
 
@@ -126,7 +437,7 @@ const Recommendations = () => {
         category: category,
         suggestion_name: suggestion.name,
         suggestion_url: suggestion.url,
-        user_location: null
+        user_location: userLocation
       }, { headers });
       
       // Open in new tab
@@ -138,13 +449,27 @@ const Recommendations = () => {
     }
   };
 
-  const handleEmergencySelect = (emergencyType) => {
-    setSelectedEmergency(emergencyType);
-    fetchHospitals(emergencyType);
+  const handleManualLocationSubmit = async () => {
+    if (!manualLocation.trim()) return;
+    
+    try {
+      setLoadingHospitals(true);
+      const location = await geocodeManualLocation(manualLocation);
+      
+      if (selectedEmergency) {
+        await fetchNearbyPlaces(selectedEmergency, location);
+      }
+    } catch (error) {
+      console.error('Error with manual location:', error);
+    } finally {
+      setLoadingHospitals(false);
+    }
   };
 
-  const handleHospitalCall = (phone) => {
-    window.location.href = `tel:${phone}`;
+  const handlePlaceCall = (phone) => {
+    if (phone) {
+      window.location.href = `tel:${phone}`;
+    }
   };
 
   const handleGoogleSearch = (category) => {
@@ -333,138 +658,254 @@ const Recommendations = () => {
       {/* Emergency Fund Special Section */}
       {selectedCategory === 'Emergency Fund' && (
         <div className="bg-gradient-to-r from-red-50 to-orange-50 rounded-xl shadow-lg p-6 border border-red-200">
-        <div className="flex items-center gap-3 mb-6">
-          <ExclamationTriangleIcon className="w-6 h-6 text-red-600" />
-          <h2 className="text-xl font-semibold text-gray-900">Emergency Fund - Hospital Finder</h2>
-        </div>
-        
-        <div className="space-y-6">
-          {/* Emergency Type Selection */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-3">
-              What type of emergency?
-            </label>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {emergencyTypes.map((type, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleEmergencySelect(type.name)}
-                  className={`p-3 rounded-lg border text-left transition-all duration-200 ${
-                    selectedEmergency === type.name
-                      ? 'border-red-300 bg-red-50 text-red-800'
-                      : 'border-gray-200 bg-white hover:border-red-200 hover:bg-red-50'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">{type.icon}</span>
-                    <div>
-                      <h3 className="font-medium text-sm">{type.name}</h3>
-                      <p className="text-xs text-gray-600">{type.description}</p>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
+          <div className="flex items-center gap-3 mb-6">
+            <ExclamationTriangleIcon className="w-6 h-6 text-red-600" />
+            <h2 className="text-xl font-semibold text-gray-900">Emergency Services Finder</h2>
           </div>
-
-          {/* Hospital Results */}
-          {selectedEmergency && (
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Nearby Hospitals for {selectedEmergency}
-              </h3>
-              
-              {loadingHospitals ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
-                  <span className="ml-2 text-gray-600">Finding hospitals...</span>
+          
+          <div className="space-y-6">
+            {/* Location Status */}
+            {!userLocation && !showManualLocation && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <MapPinIcon className="w-5 h-5 text-blue-600" />
+                  <h3 className="font-medium text-blue-800">Location Access Required</h3>
                 </div>
-              ) : hospitals.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {hospitals.map((hospital, index) => (
-                    <div key={index} className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                      <div className="flex items-start justify-between mb-2">
-                        <h4 className="font-semibold text-gray-900 text-sm leading-tight">
-                          {hospital.name}
-                        </h4>
-                        {hospital.rating && (
-                          <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded flex items-center gap-1">
-                            <StarIcon className="w-3 h-3 fill-current" />
-                            {hospital.rating}
-                          </span>
-                        )}
+                <p className="text-sm text-blue-700 mb-3">
+                  We need your location to find nearby emergency services. Your location data stays on your device.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={getUserLocation}
+                    className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    📍 Use My Location
+                  </button>
+                  <button
+                    onClick={() => setShowManualLocation(true)}
+                    className="px-4 py-2 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300 transition-colors"
+                  >
+                    📝 Enter Manually
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Manual Location Input */}
+            {showManualLocation && (
+              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <h3 className="font-medium text-yellow-800 mb-2">Enter Your Location</h3>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={manualLocation}
+                    onChange={(e) => setManualLocation(e.target.value)}
+                    placeholder="e.g., Mumbai, Maharashtra or specific address"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    onKeyPress={(e) => e.key === 'Enter' && handleManualLocationSubmit()}
+                  />
+                  <button
+                    onClick={handleManualLocationSubmit}
+                    className="px-4 py-2 bg-yellow-600 text-white text-sm rounded-lg hover:bg-yellow-700 transition-colors"
+                  >
+                    Find
+                  </button>
+                </div>
+                <button
+                  onClick={() => setShowManualLocation(false)}
+                  className="text-sm text-gray-600 hover:text-gray-800 mt-2"
+                >
+                  ← Try location access again
+                </button>
+              </div>
+            )}
+
+            {/* Location Error */}
+            {locationError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-sm text-red-700">{locationError}</p>
+              </div>
+            )}
+
+            {/* Current Location Display */}
+            {userLocation && (
+              <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <MapPinIcon className="w-4 h-4 text-green-600" />
+                  <span className="text-sm text-green-700 font-medium">
+                    Location: {userLocation.address ? userLocation.address.split(',').slice(0, 2).join(', ') : 
+                    `${userLocation.latitude.toFixed(4)}, ${userLocation.longitude.toFixed(4)}`}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Emergency Type Selection */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-3">
+                What type of emergency?
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {emergencyTypes.map((type, index) => (
+                  <button
+                    key={type.id}
+                    onClick={() => handleEmergencySelect(type)}
+                    disabled={!userLocation && !showManualLocation}
+                    className={`p-4 rounded-lg border text-left transition-all duration-200 ${
+                      selectedEmergency === type.id
+                        ? 'border-red-300 bg-red-50 text-red-800'
+                        : userLocation || showManualLocation
+                          ? 'border-gray-200 bg-white hover:border-red-200 hover:bg-red-50'
+                          : 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">{type.icon}</span>
+                      <div className="flex-1">
+                        <h3 className="font-medium text-sm">{type.name}</h3>
+                        <p className="text-xs text-gray-600 mt-1">{type.description}</p>
                       </div>
-                      
-                      <div className="space-y-2 text-sm text-gray-600">
-                        <div className="flex items-center gap-2">
-                          <MapPinIcon className="w-4 h-4 text-gray-400" />
-                          <span className="text-xs">{hospital.address}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Nearby Places Results */}
+            {selectedEmergency && (
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Nearby {emergencyTypes.find(t => t.id === selectedEmergency)?.name} Services
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setSelectedEmergency('');
+                      setNearbyPlaces([]);
+                    }}
+                    className="text-sm text-gray-600 hover:text-gray-800"
+                  >
+                    ← Back
+                  </button>
+                </div>
+                
+                {loadingHospitals ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
+                    <span className="ml-2 text-gray-600">Finding nearby services...</span>
+                  </div>
+                ) : nearbyPlaces.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {nearbyPlaces.map((place, index) => (
+                      <div key={place.id || index} className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-gray-900 text-sm leading-tight">
+                              {place.name}
+                            </h4>
+                            <p className="text-xs text-blue-600 mt-1">{place.type}</p>
+                          </div>
+                          <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
+                            {place.distanceText}
+                          </span>
                         </div>
                         
-                        <div className="flex items-center gap-4">
-                          <button
-                            onClick={() => handleHospitalCall(hospital.phone)}
-                            className="flex items-center gap-1 text-blue-600 hover:text-blue-800 transition-colors"
-                          >
-                            <PhoneIcon className="w-4 h-4" />
-                            <span className="text-xs">{hospital.phone}</span>
-                          </button>
-                          
-                          {hospital.emergency_phone && (
-                            <button
-                              onClick={() => handleHospitalCall(hospital.emergency_phone)}
-                              className="flex items-center gap-1 text-red-600 hover:text-red-800 transition-colors"
-                            >
-                              <PhoneIcon className="w-4 h-4" />
-                              <span className="text-xs font-medium">Emergency: {hospital.emergency_phone}</span>
-                            </button>
-                          )}
-                        </div>
-
-                        {hospital.specialties && hospital.specialties.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-2">
-                            {hospital.specialties.slice(0, 3).map((specialty, idx) => (
-                              <span key={idx} className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded">
-                                {specialty}
-                              </span>
-                            ))}
+                        <div className="space-y-2 text-sm text-gray-600">
+                          <div className="flex items-start gap-2">
+                            <MapPinIcon className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                            <span className="text-xs">{place.address}</span>
                           </div>
-                        )}
-
-                        <div className="flex items-center gap-4 mt-2 text-xs">
-                          {hospital.is_24x7 && (
-                            <span className="text-green-600 font-medium">24/7</span>
+                          
+                          {place.opening_hours && (
+                            <div className="text-xs text-gray-500">
+                              📍 {place.opening_hours}
+                            </div>
                           )}
-                          <span className="text-gray-500 capitalize">{hospital.type}</span>
+
+                          <div className="flex items-center gap-2 pt-2">
+                            {place.phone && (
+                              <button
+                                onClick={() => handlePlaceCall(place.phone)}
+                                className="flex items-center gap-1 px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
+                              >
+                                <PhoneIcon className="w-3 h-3" />
+                                Call
+                              </button>
+                            )}
+                            
+                            <button
+                              onClick={() => handlePlaceCall('108')}
+                              className="flex items-center gap-1 px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors"
+                            >
+                              <PhoneIcon className="w-3 h-3" />
+                              Emergency (108)
+                            </button>
+
+                            <button
+                              onClick={() => navigateToPlace(place)}
+                              className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
+                            >
+                              🧭 Navigate
+                            </button>
+                          </div>
+
+                          {place.website && (
+                            <div className="pt-1">
+                              <a
+                                href={place.website}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-blue-600 hover:text-blue-800 underline"
+                              >
+                                Visit Website
+                              </a>
+                            </div>
+                          )}
                         </div>
                       </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <ExclamationTriangleIcon className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                    <p className="text-gray-600 mb-4">
+                      No {emergencyTypes.find(t => t.id === selectedEmergency)?.name.toLowerCase()} services found nearby.
+                    </p>
+                    <div className="flex gap-2 justify-center">
+                      <button
+                        onClick={() => handlePlaceCall('108')}
+                        className="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors"
+                      >
+                        🚨 Call Emergency (108)
+                      </button>
+                      <button
+                        onClick={() => handlePlaceCall('112')}
+                        className="px-4 py-2 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition-colors"
+                      >
+                        🆘 Call National Emergency (112)
+                      </button>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-center text-gray-500 py-8">
-                  No hospitals found for this emergency type. Try selecting a different emergency type.
-                </p>
-              )}
-            </div>
-          )}
+                  </div>
+                )}
+              </div>
+            )}
           
-          {/* Search on Google Button for Emergency Fund */}
-          <div className="mt-6 text-center">
-            <button
-              onClick={() => handleGoogleSearch('Emergency Fund')}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-              </svg>
-              Search Emergency Fund Apps on Google
-            </button>
+            {/* Search on Google Button for Emergency Fund */}
+            <div className="mt-6 text-center">
+              <button
+                onClick={() => handleGoogleSearch('Emergency Fund')}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                Search More Emergency Services
+              </button>
+            </div>
           </div>
-        </div>
         </div>
       )}
     </div>

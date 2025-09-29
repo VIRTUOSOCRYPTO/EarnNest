@@ -30,6 +30,11 @@ const Recommendations = () => {
   const [manualLocation, setManualLocation] = useState('');
   const [showManualLocation, setShowManualLocation] = useState(false);
   const [nearbyPlaces, setNearbyPlaces] = useState([]);
+  
+  // Enhanced Emergency Fund states
+  const [accidentType, setAccidentType] = useState('');
+  const [selectedMedicalEmergency, setSelectedMedicalEmergency] = useState('');
+  const [customMedicalEmergency, setCustomMedicalEmergency] = useState('');
 
   const categoryIcons = {
     'Food': ShoppingCartIcon,
@@ -47,7 +52,7 @@ const Recommendations = () => {
 
   const categories = ['Food', 'Transportation', 'Books', 'Entertainment', 'Rent', 'Utilities', 'Movies', 'Shopping', 'Groceries', 'Subscriptions', 'Emergency Fund'];
 
-  // Emergency categories with their place types
+  // Emergency categories with enhanced accident and medical types
   const emergencyCategories = [
     {
       id: 'fire_emergency',
@@ -91,6 +96,20 @@ const Recommendations = () => {
       description: 'Hospitals, pharmacies, clinics',
       placeTypes: ['hospital', 'pharmacy', 'clinic', 'emergency']
     }
+  ];
+
+  // Medical emergency types for dropdown
+  const medicalEmergencyTypes = [
+    { value: 'cardiac', label: 'Cardiac Emergency' },
+    { value: 'pediatric', label: 'Pediatric Emergency' },
+    { value: 'orthopedic', label: 'Orthopedic Emergency' },
+    { value: 'neurological', label: 'Neurological Emergency' },
+    { value: 'respiratory', label: 'Respiratory Emergency' },
+    { value: 'gastroenterology', label: 'Gastroenterology Emergency' },
+    { value: 'psychiatric', label: 'Psychiatric Emergency' },
+    { value: 'obstetric', label: 'Obstetric Emergency' },
+    { value: 'general', label: 'General Emergency' },
+    { value: 'trauma', label: 'Trauma Emergency' }
   ];
 
   useEffect(() => {
@@ -176,8 +195,8 @@ const Recommendations = () => {
     }
   };
 
-  // Fetch nearby places using OpenStreetMap Overpass API
-  const fetchNearbyPlaces = async (category, location = null) => {
+  // Enhanced fetch nearby places with specific type support
+  const fetchNearbyPlaces = async (category, location = null, specificType = null) => {
     const currentLocation = location || userLocation;
     if (!currentLocation) {
       setLocationError('Location required to find nearby places');
@@ -191,14 +210,18 @@ const Recommendations = () => {
       const categoryConfig = emergencyCategories.find(cat => cat.id === category);
       if (!categoryConfig) return;
 
-      // Build Overpass query for different place types
-      const placeTypes = categoryConfig.placeTypes;
-      const radius = 5000; // 5km radius
+      // Enhanced search radius and location coverage
+      const radius = 15000; // Increased to 15km for broader search
       
       let overpassQuery = '[out:json][timeout:25];(';
       
+      // Enhanced place types based on category and specific type
+      const placeTypes = categoryConfig.placeTypes;
+      
       placeTypes.forEach(placeType => {
         let amenityTag = '';
+        let additionalFilters = '';
+        
         switch (placeType) {
           case 'fire_station':
             amenityTag = 'amenity=fire_station';
@@ -211,9 +234,46 @@ const Recommendations = () => {
             break;
           case 'hospital':
             amenityTag = 'amenity=hospital';
+            // Add specific filters for accident and medical emergencies
+            if (category === 'accident' && specificType) {
+              if (specificType.toLowerCase().includes('road') || specificType.toLowerCase().includes('traffic')) {
+                additionalFilters = '[emergency=yes][healthcare:speciality~"trauma|emergency"]';
+              } else if (specificType.toLowerCase().includes('workplace')) {
+                additionalFilters = '[healthcare:speciality~"occupational|trauma"]';
+              }
+            } else if (category === 'medical_emergency' && specificType) {
+              const specialtyMap = {
+                'cardiac': 'cardiology',
+                'pediatric': 'paediatrics',
+                'orthopedic': 'orthopaedics',
+                'neurological': 'neurology',
+                'respiratory': 'pulmonology',
+                'gastroenterology': 'gastroenterology',
+                'psychiatric': 'psychiatry',
+                'obstetric': 'obstetrics',
+                'trauma': 'trauma'
+              };
+              const specialty = specialtyMap[specificType] || specificType;
+              additionalFilters = `[healthcare:speciality~"${specialty}|emergency|general"]`;
+            }
             break;
           case 'clinic':
             amenityTag = 'amenity=clinic';
+            // Add specific filters for medical emergencies
+            if (category === 'medical_emergency' && specificType) {
+              const specialtyMap = {
+                'cardiac': 'cardiology',
+                'pediatric': 'paediatrics',
+                'orthopedic': 'orthopaedics',
+                'neurological': 'neurology',
+                'respiratory': 'pulmonology',
+                'gastroenterology': 'gastroenterology',
+                'psychiatric': 'psychiatry',
+                'obstetric': 'obstetrics'
+              };
+              const specialty = specialtyMap[specificType] || specificType;
+              additionalFilters = `[healthcare:speciality~"${specialty}"]`;
+            }
             break;
           case 'pharmacy':
             amenityTag = 'amenity=pharmacy';
@@ -225,8 +285,12 @@ const Recommendations = () => {
             amenityTag = `amenity=${placeType}`;
         }
         
-        overpassQuery += `node[${amenityTag}](around:${radius},${currentLocation.latitude},${currentLocation.longitude});`;
-        overpassQuery += `way[${amenityTag}](around:${radius},${currentLocation.latitude},${currentLocation.longitude});`;
+        // Enhanced query to search broader areas
+        overpassQuery += `node[${amenityTag}${additionalFilters}](around:${radius},${currentLocation.latitude},${currentLocation.longitude});`;
+        overpassQuery += `way[${amenityTag}${additionalFilters}](around:${radius},${currentLocation.latitude},${currentLocation.longitude});`;
+        
+        // Add relation search for comprehensive coverage
+        overpassQuery += `relation[${amenityTag}${additionalFilters}](around:${radius},${currentLocation.latitude},${currentLocation.longitude});`;
       });
       
       overpassQuery += ');out center meta;';
@@ -245,14 +309,14 @@ const Recommendations = () => {
 
       const data = await response.json();
       
-      // Process and format the results
+      // Enhanced result processing
       const places = data.elements.map(element => {
         const lat = element.lat || (element.center && element.center.lat);
         const lon = element.lon || (element.center && element.center.lon);
         
         if (!lat || !lon) return null;
 
-        // Calculate distance
+        // Calculate distance (but won't display the symbols)
         const distance = calculateDistance(
           currentLocation.latitude,
           currentLocation.longitude,
@@ -410,6 +474,11 @@ const Recommendations = () => {
     setSelectedEmergency(emergencyCategory.id);
     setNearbyPlaces([]);
     
+    // Reset specific emergency type selections
+    setAccidentType('');
+    setSelectedMedicalEmergency('');
+    setCustomMedicalEmergency('');
+    
     try {
       // Try to get location first
       let location = userLocation;
@@ -417,12 +486,57 @@ const Recommendations = () => {
         location = await getUserLocation();
       }
       
-      // Fetch nearby places for the selected category
+      // For accident and medical emergencies, don't immediately fetch - wait for type selection
+      if (emergencyCategory.id === 'accident' || emergencyCategory.id === 'medical_emergency') {
+        // Just set the category, user needs to specify type first
+        return;
+      }
+      
+      // For other emergencies, fetch immediately
       await fetchNearbyPlaces(emergencyCategory.id, location);
       
     } catch (error) {
       console.error('Error getting location:', error);
       // Show manual location input if geolocation fails
+      setShowManualLocation(true);
+    }
+  };
+
+  // Handle accident type search
+  const handleAccidentSearch = async () => {
+    if (!accidentType.trim()) return;
+    
+    try {
+      let location = userLocation;
+      if (!location) {
+        location = await getUserLocation();
+      }
+      
+      // Fetch trauma centers and hospitals for accident type
+      await fetchNearbyPlaces('accident', location, accidentType);
+      
+    } catch (error) {
+      console.error('Error getting location for accident search:', error);
+      setShowManualLocation(true);
+    }
+  };
+
+  // Handle medical emergency type search
+  const handleMedicalEmergencySearch = async () => {
+    const emergencyType = customMedicalEmergency.trim() || selectedMedicalEmergency;
+    if (!emergencyType) return;
+    
+    try {
+      let location = userLocation;
+      if (!location) {
+        location = await getUserLocation();
+      }
+      
+      // Fetch specialized hospitals and clinics for medical emergency
+      await fetchNearbyPlaces('medical_emergency', location, emergencyType);
+      
+    } catch (error) {
+      console.error('Error getting location for medical emergency search:', error);
       setShowManualLocation(true);
     }
   };
@@ -457,7 +571,15 @@ const Recommendations = () => {
       const location = await geocodeManualLocation(manualLocation);
       
       if (selectedEmergency) {
-        await fetchNearbyPlaces(selectedEmergency, location);
+        // Pass specific type if available
+        let specificType = null;
+        if (selectedEmergency === 'accident' && accidentType.trim()) {
+          specificType = accidentType.trim();
+        } else if (selectedEmergency === 'medical_emergency') {
+          specificType = customMedicalEmergency.trim() || selectedMedicalEmergency;
+        }
+        
+        await fetchNearbyPlaces(selectedEmergency, location, specificType);
       }
     } catch (error) {
       console.error('Error with manual location:', error);
@@ -771,6 +893,101 @@ const Recommendations = () => {
               </div>
             </div>
 
+            {/* Accident Type Search */}
+            {selectedEmergency === 'accident' && (
+              <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                <h3 className="font-medium text-orange-800 mb-3">🚗 Specify Accident Type</h3>
+                <p className="text-sm text-orange-700 mb-3">
+                  Enter the specific type of accident to find the most relevant trauma centers and hospitals.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={accidentType}
+                    onChange={(e) => setAccidentType(e.target.value)}
+                    placeholder="e.g., road accident, workplace accident, sports injury"
+                    className="flex-1 px-3 py-2 border border-orange-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    onKeyPress={(e) => e.key === 'Enter' && handleAccidentSearch()}
+                  />
+                  <button
+                    onClick={handleAccidentSearch}
+                    disabled={!accidentType.trim()}
+                    className="px-4 py-2 bg-orange-600 text-white text-sm rounded-lg hover:bg-orange-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                  >
+                    🔍 Find Centers
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {['road accident', 'workplace accident', 'sports injury', 'fall injury'].map(suggestion => (
+                    <button
+                      key={suggestion}
+                      onClick={() => {
+                        setAccidentType(suggestion);
+                        setTimeout(() => handleAccidentSearch(), 100);
+                      }}
+                      className="px-2 py-1 text-xs bg-white border border-orange-200 rounded text-orange-600 hover:bg-orange-50"
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Medical Emergency Type Selection */}
+            {selectedEmergency === 'medical_emergency' && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <h3 className="font-medium text-blue-800 mb-3">🏥 Select Medical Emergency Type</h3>
+                <p className="text-sm text-blue-700 mb-3">
+                  Choose the type of medical emergency to find specialized hospitals and clinics.
+                </p>
+                
+                {/* Medical Emergency Dropdown */}
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-blue-800 mb-1">
+                      Common Emergency Types:
+                    </label>
+                    <select
+                      value={selectedMedicalEmergency}
+                      onChange={(e) => setSelectedMedicalEmergency(e.target.value)}
+                      className="w-full px-3 py-2 border border-blue-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Select emergency type...</option>
+                      {medicalEmergencyTypes.map(type => (
+                        <option key={type.value} value={type.value}>{type.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="text-center text-gray-500 text-sm font-medium">OR</div>
+
+                  {/* Custom Medical Emergency Input */}
+                  <div>
+                    <label className="block text-sm font-medium text-blue-800 mb-1">
+                      Custom Emergency Type:
+                    </label>
+                    <input
+                      type="text"
+                      value={customMedicalEmergency}
+                      onChange={(e) => setCustomMedicalEmergency(e.target.value)}
+                      placeholder="e.g., diabetic emergency, allergic reaction, seizure"
+                      className="w-full px-3 py-2 border border-blue-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onKeyPress={(e) => e.key === 'Enter' && handleMedicalEmergencySearch()}
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleMedicalEmergencySearch}
+                    disabled={!selectedMedicalEmergency && !customMedicalEmergency.trim()}
+                    className="w-full px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                  >
+                    🔍 Find Specialized Care
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Nearby Places Results */}
             {selectedEmergency && (
               <div>
@@ -805,9 +1022,6 @@ const Recommendations = () => {
                             </h4>
                             <p className="text-xs text-blue-600 mt-1">{place.type}</p>
                           </div>
-                          <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
-                            {place.distanceText}
-                          </span>
                         </div>
                         
                         <div className="space-y-2 text-sm text-gray-600">

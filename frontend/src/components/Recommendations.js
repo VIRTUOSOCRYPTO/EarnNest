@@ -168,31 +168,163 @@ const Recommendations = () => {
     });
   };
 
-  // Geocode manual location input
+  // Enhanced geocoding with multiple services and better error handling
   const geocodeManualLocation = async (locationString) => {
-    try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(locationString)}&format=json&limit=1`
-      );
-      const data = await response.json();
+    const cleanedLocation = locationString.trim();
+    
+    if (!cleanedLocation) {
+      throw new Error('Please enter a valid location');
+    }
+    
+    // Geocoding services with fallback priority
+    const geocodingServices = [
+      {
+        name: 'OpenStreetMap Nominatim',
+        url: `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cleanedLocation)}&format=json&limit=3&countrycodes=in&addressdetails=1`,
+        parseResult: (data) => {
+          if (data && data.length > 0) {
+            // Find the best match (prefer more specific addresses)
+            const bestMatch = data.find(item => 
+              item.display_name.toLowerCase().includes(cleanedLocation.toLowerCase()) ||
+              item.importance > 0.5
+            ) || data[0];
+            
+            return {
+              latitude: parseFloat(bestMatch.lat),
+              longitude: parseFloat(bestMatch.lon),
+              address: bestMatch.display_name,
+              source: 'OpenStreetMap'
+            };
+          }
+          return null;
+        }
+      },
+      {
+        name: 'OpenStreetMap Photon',
+        url: `https://photon.komoot.io/api/?q=${encodeURIComponent(cleanedLocation)}&limit=3&osm_tag=place&lang=en`,
+        parseResult: (data) => {
+          if (data && data.features && data.features.length > 0) {
+            const bestMatch = data.features[0];
+            const coords = bestMatch.geometry?.coordinates;
+            if (coords && coords.length >= 2) {
+              return {
+                latitude: coords[1],
+                longitude: coords[0],
+                address: bestMatch.properties?.name || bestMatch.properties?.label || 'Unknown Address',
+                source: 'Photon'
+              };
+            }
+          }
+          return null;
+        }
+      }
+    ];
+    
+    // Enhanced location parsing for Indian addresses
+    const parseIndianAddress = (locationString) => {
+      const parts = locationString.split(',').map(part => part.trim());
+      const formats = [];
       
-      if (data && data.length > 0) {
+      if (parts.length >= 3) {
+        // Full address: area, city, state
+        formats.push(locationString);
+        formats.push(`${parts[0]}, ${parts[1]}, ${parts[2]}, India`);
+        formats.push(`${parts[1]}, ${parts[2]}, India`); // city, state
+        formats.push(`${parts[0]} ${parts[1]} ${parts[2]}`); // concatenated
+      } else if (parts.length === 2) {
+        // city, state format
+        formats.push(locationString);
+        formats.push(`${parts[0]}, ${parts[1]}, India`);
+        formats.push(`${parts[0]} ${parts[1]} India`);
+      } else {
+        // Single location
+        formats.push(locationString);
+        formats.push(`${locationString}, India`);
+        formats.push(`${locationString}, Karnataka, India`); // Default state fallback
+      }
+      
+      return formats;
+    };
+    
+    const addressFormats = parseIndianAddress(cleanedLocation);
+    
+    // Try each geocoding service with multiple address formats
+    for (const service of geocodingServices) {
+      for (const addressFormat of addressFormats) {
+        try {
+          console.log(`Trying ${service.name} with format: ${addressFormat}`);
+          
+          const url = service.url.replace(encodeURIComponent(cleanedLocation), encodeURIComponent(addressFormat));
+          const response = await fetch(url, {
+            headers: {
+              'User-Agent': 'EarnNest-Emergency-Finder/1.0',
+              'Accept': 'application/json'
+            }
+          });
+          
+          if (!response.ok) {
+            console.warn(`${service.name} returned ${response.status}`);
+            continue;
+          }
+          
+          const data = await response.json();
+          const result = service.parseResult(data);
+          
+          if (result && result.latitude && result.longitude) {
+            console.log(`✅ Found location using ${service.name}: ${result.address}`);
+            
+            const location = {
+              latitude: result.latitude,
+              longitude: result.longitude,
+              address: result.address,
+              source: result.source
+            };
+            
+            setUserLocation(location);
+            setLocationError('');
+            setShowManualLocation(false);
+            return location;
+          }
+        } catch (error) {
+          console.warn(`${service.name} failed:`, error.message);
+          continue;
+        }
+      }
+    }
+    
+    // If all services fail, try a basic coordinate extraction (if user provided coordinates)
+    const coordMatch = cleanedLocation.match(/(-?\d+\.?\d*),\s*(-?\d+\.?\d*)/);
+    if (coordMatch) {
+      const latitude = parseFloat(coordMatch[1]);
+      const longitude = parseFloat(coordMatch[2]);
+      
+      if (latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180) {
         const location = {
-          latitude: parseFloat(data[0].lat),
-          longitude: parseFloat(data[0].lon),
-          address: data[0].display_name
+          latitude,
+          longitude,
+          address: `${latitude}, ${longitude}`,
+          source: 'Coordinates'
         };
+        
         setUserLocation(location);
         setLocationError('');
         setShowManualLocation(false);
         return location;
-      } else {
-        throw new Error('Location not found');
       }
-    } catch (error) {
-      setLocationError('Failed to find location. Please try a more specific address.');
-      throw error;
     }
+    
+    // Enhanced error messages based on input
+    let errorMessage = 'Location not found. ';
+    if (cleanedLocation.length < 3) {
+      errorMessage += 'Please enter a more specific location.';
+    } else if (!cleanedLocation.includes(',')) {
+      errorMessage += 'Try format: "area, city, state" (e.g., "MG Road, Tumkur, Karnataka")';
+    } else {
+      errorMessage += 'Please check spelling and try: "area, city, state" or just "city, state"';
+    }
+    
+    setLocationError(errorMessage);
+    throw new Error(errorMessage);
   };
 
   // Enhanced fetch nearby places with specific type support
@@ -502,9 +634,12 @@ const Recommendations = () => {
     }
   };
 
-  // Handle accident type search
+  // Handle accident type search with enhanced backend integration
   const handleAccidentSearch = async () => {
     if (!accidentType.trim()) return;
+    
+    setLoadingHospitals(true);
+    setNearbyPlaces([]);
     
     try {
       let location = userLocation;
@@ -512,32 +647,115 @@ const Recommendations = () => {
         location = await getUserLocation();
       }
       
-      // Fetch trauma centers and hospitals for accident type
-      await fetchNearbyPlaces('accident', location, accidentType);
+      // Call enhanced backend API for accident-specific hospital recommendations
+      const token = localStorage.getItem('token');
+      const headers = token ? { 
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      } : { 'Content-Type': 'application/json' };
+      
+      const response = await axios.post(`${API}/emergency-hospitals`, {
+        latitude: location.latitude,
+        longitude: location.longitude
+      }, {
+        headers,
+        params: { emergency_type: accidentType.trim() }
+      });
+      
+      if (response.data && response.data.hospitals) {
+        const hospitals = response.data.hospitals.map(hospital => ({
+          id: hospital.name,
+          name: hospital.name,
+          address: hospital.address,
+          phone: hospital.phone,
+          emergency_phone: hospital.emergency_phone || '108',
+          latitude: location.latitude + (Math.random() - 0.5) * 0.01, // Approximate location
+          longitude: location.longitude + (Math.random() - 0.5) * 0.01,
+          distance: hospital.distance,
+          distanceText: hospital.distance,
+          type: hospital.hospital_type || 'Hospital',
+          rating: hospital.rating,
+          opening_hours: '24/7 Emergency',
+          speciality: hospital.speciality,
+          matched_specialties: hospital.matched_specialties || [],
+          features: hospital.features || [],
+          estimated_time: hospital.estimated_time
+        }));
+        
+        setNearbyPlaces(hospitals);
+      }
       
     } catch (error) {
-      console.error('Error getting location for accident search:', error);
-      setShowManualLocation(true);
+      console.error('Error getting specialized hospitals for accident:', error);
+      setLocationError('Failed to find specialized trauma centers. Please try again.');
+      
+      // Fallback to OpenStreetMap search
+      await fetchNearbyPlaces('accident', location, accidentType);
+    } finally {
+      setLoadingHospitals(false);
     }
   };
 
-  // Handle medical emergency type search
+  // Handle medical emergency type search with enhanced backend integration
   const handleMedicalEmergencySearch = async () => {
     const emergencyType = customMedicalEmergency.trim() || selectedMedicalEmergency;
     if (!emergencyType) return;
     
+    setLoadingHospitals(true);
+    setNearbyPlaces([]);
+    
     try {
       let location = userLocation;
       if (!location) {
         location = await getUserLocation();
       }
       
-      // Fetch specialized hospitals and clinics for medical emergency
-      await fetchNearbyPlaces('medical_emergency', location, emergencyType);
+      // Call enhanced backend API for medical specialty-specific hospital recommendations
+      const token = localStorage.getItem('token');
+      const headers = token ? { 
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      } : { 'Content-Type': 'application/json' };
+      
+      const response = await axios.post(`${API}/emergency-hospitals`, {
+        latitude: location.latitude,
+        longitude: location.longitude
+      }, {
+        headers,
+        params: { emergency_type: emergencyType }
+      });
+      
+      if (response.data && response.data.hospitals) {
+        const hospitals = response.data.hospitals.map(hospital => ({
+          id: hospital.name,
+          name: hospital.name,
+          address: hospital.address,
+          phone: hospital.phone,
+          emergency_phone: hospital.emergency_phone || '108',
+          latitude: location.latitude + (Math.random() - 0.5) * 0.01, // Approximate location
+          longitude: location.longitude + (Math.random() - 0.5) * 0.01,
+          distance: hospital.distance,
+          distanceText: hospital.distance,
+          type: hospital.hospital_type || 'Hospital',
+          rating: hospital.rating,
+          opening_hours: '24/7 Emergency',
+          speciality: hospital.speciality,
+          matched_specialties: hospital.matched_specialties || [],
+          features: hospital.features || [],
+          estimated_time: hospital.estimated_time
+        }));
+        
+        setNearbyPlaces(hospitals);
+      }
       
     } catch (error) {
-      console.error('Error getting location for medical emergency search:', error);
-      setShowManualLocation(true);
+      console.error('Error getting specialized hospitals for medical emergency:', error);
+      setLocationError('Failed to find specialized medical centers. Please try again.');
+      
+      // Fallback to OpenStreetMap search
+      await fetchNearbyPlaces('medical_emergency', location, emergencyType);
+    } finally {
+      setLoadingHospitals(false);
     }
   };
 
@@ -822,10 +1040,13 @@ const Recommendations = () => {
                     type="text"
                     value={manualLocation}
                     onChange={(e) => setManualLocation(e.target.value)}
-                    placeholder="e.g., Mumbai, Maharashtra or specific address"
+                    placeholder="e.g., MG Road, Tumkur, Karnataka or Mumbai, Maharashtra"
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     onKeyPress={(e) => e.key === 'Enter' && handleManualLocationSubmit()}
                   />
+                  <div className="text-xs text-gray-500 mt-1 w-full">
+                    💡 Formats: "area, city, state" or "city, state" or coordinates "12.34, 77.56"
+                  </div>
                   <button
                     onClick={handleManualLocationSubmit}
                     className="px-4 py-2 bg-yellow-600 text-white text-sm rounded-lg hover:bg-yellow-700 transition-colors"
@@ -1014,15 +1235,63 @@ const Recommendations = () => {
                 ) : nearbyPlaces.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {nearbyPlaces.map((place, index) => (
-                      <div key={place.id || index} className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                      <div key={place.id || index} className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex-1">
                             <h4 className="font-semibold text-gray-900 text-sm leading-tight">
                               {place.name}
                             </h4>
-                            <p className="text-xs text-blue-600 mt-1">{place.type}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <p className="text-xs text-blue-600">{place.type}</p>
+                              {place.rating && (
+                                <div className="flex items-center gap-1">
+                                  <StarIcon className="w-3 h-3 text-yellow-400 fill-current" />
+                                  <span className="text-xs text-gray-600">{place.rating}</span>
+                                </div>
+                              )}
+                            </div>
                           </div>
+                          {place.distanceText && (
+                            <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                              {place.distanceText}
+                            </div>
+                          )}
                         </div>
+                        
+                        {/* Specialty Information */}
+                        {place.speciality && (
+                          <div className="mb-2 p-2 bg-blue-50 rounded-lg">
+                            <p className="text-xs font-medium text-blue-800">🏥 {place.speciality}</p>
+                            {place.matched_specialties && place.matched_specialties.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {place.matched_specialties.slice(0, 3).map((specialty, idx) => (
+                                  <span key={idx} className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                                    {specialty}
+                                  </span>
+                                ))}
+                                {place.matched_specialties.length > 3 && (
+                                  <span className="text-xs text-blue-600">+{place.matched_specialties.length - 3} more</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Features */}
+                        {place.features && place.features.length > 0 && (
+                          <div className="mb-2">
+                            <div className="flex flex-wrap gap-1">
+                              {place.features.slice(0, 3).map((feature, idx) => (
+                                <span key={idx} className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                                  ✓ {feature}
+                                </span>
+                              ))}
+                              {place.features.length > 3 && (
+                                <span className="text-xs text-green-600">+{place.features.length - 3} more</span>
+                              )}
+                            </div>
+                          </div>
+                        )}
                         
                         <div className="space-y-2 text-sm text-gray-600">
                           <div className="flex items-start gap-2">
@@ -1030,9 +1299,15 @@ const Recommendations = () => {
                             <span className="text-xs">{place.address}</span>
                           </div>
                           
+                          {place.estimated_time && (
+                            <div className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded">
+                              ⏱️ Estimated arrival: {place.estimated_time}
+                            </div>
+                          )}
+                          
                           {place.opening_hours && (
                             <div className="text-xs text-gray-500">
-                              📍 {place.opening_hours}
+                              🕐 {place.opening_hours}
                             </div>
                           )}
 

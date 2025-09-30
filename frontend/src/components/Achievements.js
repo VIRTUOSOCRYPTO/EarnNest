@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../App';
 import { getTranslation } from '../translations';
+import { useWebSocket } from '../hooks/useWebSocket';
 import { 
   TrophyIcon, 
   LockClosedIcon,
@@ -18,17 +19,54 @@ const API = `${BACKEND_URL}/api`;
 
 const Achievements = () => {
   const { user } = useAuth();
+  const { realTimeData, isConnected } = useWebSocket();
   const [allAchievements, setAllAchievements] = useState([]);
   const [userAchievements, setUserAchievements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [language, setLanguage] = useState(user?.preferred_language || 'en');
+  const [animatingAchievements, setAnimatingAchievements] = useState(new Set());
 
   const t = (category, key) => getTranslation(category, key, language);
 
   useEffect(() => {
     fetchAchievements();
   }, []);
+
+  // Handle real-time achievement updates
+  useEffect(() => {
+    if (realTimeData.achievements.length > 0) {
+      const newAchievements = realTimeData.achievements;
+      
+      newAchievements.forEach(achievement => {
+        // Add animation class for newly unlocked achievements
+        setAnimatingAchievements(prev => new Set([...prev, achievement.id]));
+        
+        // Remove animation after 3 seconds
+        setTimeout(() => {
+          setAnimatingAchievements(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(achievement.id);
+            return newSet;
+          });
+        }, 3000);
+        
+        // Update the achievements list
+        setAllAchievements(prev => 
+          prev.map(a => 
+            a.id === achievement.id 
+              ? { ...a, earned: true, earned_at: new Date().toISOString() }
+              : a
+          )
+        );
+        
+        setUserAchievements(prev => [
+          ...prev.filter(a => a.id !== achievement.id),
+          achievement
+        ]);
+      });
+    }
+  }, [realTimeData.achievements]);
 
   const fetchAchievements = async () => {
     try {
@@ -102,10 +140,21 @@ const Achievements = () => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          {t('achievements', 'title')} 🏆
-        </h1>
-        <p className="text-gray-600">{t('achievements', 'subtitle')}</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              {t('achievements', 'title')} 🏆
+            </h1>
+            <p className="text-gray-600">{t('achievements', 'subtitle')}</p>
+          </div>
+          {/* Real-time Status Indicator */}
+          <div className="flex items-center gap-2">
+            <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></div>
+            <span className="text-sm text-gray-500">
+              {isConnected ? 'Live Updates' : 'Offline'}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Stats */}
@@ -175,7 +224,7 @@ const Achievements = () => {
                 isEarned
                   ? `bg-gradient-to-br ${getCategoryColor(achievement.category)} text-white shadow-lg`
                   : 'bg-white border border-gray-200 text-gray-900 shadow-sm hover:shadow-md'
-              }`}
+              } ${animatingAchievements.has(achievement.id) ? 'animate-bounce ring-4 ring-yellow-400 ring-opacity-75' : ''}`}
             >
               {/* Achievement Icon & Status */}
               <div className="flex items-center justify-between mb-4">

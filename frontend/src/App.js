@@ -17,6 +17,12 @@ import Recommendations from './components/Recommendations';
 import Navigation from './components/Navigation';
 import Footer from './components/Footer';
 
+// Viral Features Components
+import Referrals from './components/Referrals';
+import Achievements from './components/Achievements';
+import Festivals from './components/Festivals';
+import Challenges from './components/Challenges';
+
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
@@ -157,6 +163,22 @@ function App() {
               <Route 
                 path="/profile" 
                 element={user ? <Profile /> : <Navigate to="/login" />} 
+              />
+              <Route 
+                path="/referrals" 
+                element={user ? <Referrals /> : <Navigate to="/login" />} 
+              />
+              <Route 
+                path="/achievements" 
+                element={user ? <Achievements /> : <Navigate to="/login" />} 
+              />
+              <Route 
+                path="/festivals" 
+                element={user ? <Festivals /> : <Navigate to="/login" />} 
+              />
+              <Route 
+                path="/challenges" 
+                element={user ? <Challenges /> : <Navigate to="/login" />} 
               />
               <Route 
                 path="/" 

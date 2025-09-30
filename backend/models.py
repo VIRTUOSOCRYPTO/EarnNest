@@ -40,6 +40,21 @@ class User(BaseModel):
     last_failed_login: Optional[datetime] = None
     last_login: Optional[datetime] = None
     
+    # VIRAL FEATURES - New fields
+    referral_code: str = Field(default_factory=lambda: str(uuid.uuid4())[:8].upper())  # Unique 8-char code
+    referred_by: Optional[str] = None  # Referral code of who referred this user
+    earn_coins_balance: int = 0  # Current EarnCoins balance
+    total_earn_coins_earned: int = 0  # Total coins ever earned
+    total_referrals: int = 0  # Number of successful referrals
+    preferred_language: str = "en"  # "en", "hi", "ta"
+    daily_login_streak: int = 0  # Current daily login streak
+    longest_login_streak: int = 0  # Longest login streak achieved
+    last_login_date: Optional[datetime] = None  # Last login date for streak calculation
+    total_achievements_earned: int = 0  # Count of achievements earned
+    level: int = 1  # User level based on activity
+    experience_points: int = 0  # XP for leveling up
+    cultural_preferences: List[str] = []  # Festivals/cultures user is interested in
+    
     @validator('role')
     def validate_role(cls, v):
         allowed_roles = ["Student", "Professional", "Other"]
@@ -74,6 +89,9 @@ class UserCreate(BaseModel):
     location: str  # MANDATORY
     bio: Optional[str] = None
     avatar: str = "boy"  # MANDATORY - avatar selection
+    referred_by: Optional[str] = None  # Referral code used during signup
+    preferred_language: str = "en"  # Default to English
+    cultural_preferences: List[str] = []  # Optional festival/cultural interests
 
     @validator('role')
     def validate_role(cls, v):
@@ -150,6 +168,13 @@ class UserCreate(BaseModel):
         if v and len(v) > 500:
             raise ValueError('Bio cannot exceed 500 characters')
         return v
+    
+    @validator('preferred_language')
+    def validate_preferred_language(cls, v):
+        allowed_languages = ["en", "hi", "ta"]
+        if v not in allowed_languages:
+            raise ValueError(f'Preferred language must be one of: {", ".join(allowed_languages)}')
+        return v
 
     @validator('skills')
     def validate_skills(cls, v):
@@ -167,6 +192,13 @@ class UserCreate(BaseModel):
         allowed_avatars = ["boy", "man", "girl", "woman", "grandfather", "grandmother"]
         if v not in allowed_avatars:
             raise ValueError(f'Avatar must be one of: {", ".join(allowed_avatars)}')
+        return v
+    
+    @validator('preferred_language')
+    def validate_preferred_language(cls, v):
+        allowed_languages = ["en", "hi", "ta"]
+        if v not in allowed_languages:
+            raise ValueError(f'Preferred language must be one of: {", ".join(allowed_languages)}')
         return v
 
 class UserLogin(BaseModel):
@@ -963,3 +995,233 @@ class SuggestionApprovalRequest(BaseModel):
     suggestion_id: str
     approved: bool
     corrections: Optional[Dict[str, Any]] = None  # If user wants to modify before approving
+
+# ===================================
+# VIRAL FEATURES MODELS
+# ===================================
+
+# Referral System Models
+class Referral(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    referrer_id: str  # User who made the referral
+    referee_id: Optional[str] = None  # User who was referred (filled when they register)
+    referral_code: str  # Unique referral code
+    status: str = "pending"  # "pending", "completed", "expired"
+    coins_earned: int = 0  # EarnCoins earned from this referral
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    completed_at: Optional[datetime] = None
+    referee_email: Optional[str] = None  # Track who was invited
+    
+    @validator('status')
+    def validate_status(cls, v):
+        allowed_statuses = ["pending", "completed", "expired"]
+        if v not in allowed_statuses:
+            raise ValueError(f'Status must be one of: {", ".join(allowed_statuses)}')
+        return v
+
+class ReferralCreate(BaseModel):
+    referee_email: str
+
+# Achievement System Models
+class Achievement(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    name_hi: str  # Hindi name
+    name_ta: str  # Tamil name
+    description: str
+    description_hi: str  # Hindi description
+    description_ta: str  # Tamil description
+    badge_icon: str  # Icon name or emoji
+    badge_color: str  # Color code
+    category: str  # "savings", "earning", "streak", "social", "cultural"
+    points_required: int = 0  # Points needed to unlock
+    is_active: bool = True
+    difficulty: str = "easy"  # "easy", "medium", "hard", "legendary"
+    
+    @validator('category')
+    def validate_category(cls, v):
+        allowed_categories = ["savings", "earning", "streak", "social", "cultural", "learning"]
+        if v not in allowed_categories:
+            raise ValueError(f'Category must be one of: {", ".join(allowed_categories)}')
+        return v
+    
+    @validator('difficulty')
+    def validate_difficulty(cls, v):
+        allowed_difficulties = ["easy", "medium", "hard", "legendary"]
+        if v not in allowed_difficulties:
+            raise ValueError(f'Difficulty must be one of: {", ".join(allowed_difficulties)}')
+        return v
+
+class UserAchievement(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    achievement_id: str
+    earned_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    progress: float = 100.0  # Percentage completed
+    is_claimed: bool = False
+    claimed_at: Optional[datetime] = None
+
+class UserAchievementCreate(BaseModel):
+    achievement_id: str
+    progress: float = 100.0
+
+# EarnCoins System Models  
+class EarnCoinsTransaction(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    type: str  # "earned", "spent", "bonus"
+    amount: int  # Number of coins
+    source: str  # "referral", "achievement", "daily_checkin", "challenge", "purchase"
+    description: str
+    description_hi: str
+    description_ta: str
+    reference_id: Optional[str] = None  # ID of related achievement, referral, etc.
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    
+    @validator('type')
+    def validate_type(cls, v):
+        allowed_types = ["earned", "spent", "bonus"]
+        if v not in allowed_types:
+            raise ValueError(f'Type must be one of: {", ".join(allowed_types)}')
+        return v
+
+class EarnCoinsTransactionCreate(BaseModel):
+    type: str
+    amount: int
+    source: str
+    description: str
+    description_hi: str
+    description_ta: str
+    reference_id: Optional[str] = None
+
+# Daily Streak System
+class UserStreak(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    streak_type: str  # "daily_login", "expense_logging", "saving_goal"
+    current_streak: int = 0
+    longest_streak: int = 0
+    last_activity_date: Optional[datetime] = None
+    total_activities: int = 0
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    
+    @validator('streak_type')
+    def validate_streak_type(cls, v):
+        allowed_types = ["daily_login", "expense_logging", "saving_goal", "hustle_application"]
+        if v not in allowed_types:
+            raise ValueError(f'Streak type must be one of: {", ".join(allowed_types)}')
+        return v
+
+# Language Preference Model
+class UserLanguagePreference(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    language_code: str  # "en", "hi", "ta"
+    language_name: str  # "English", "Hindi", "Tamil"
+    is_primary: bool = True
+    set_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    
+    @validator('language_code')
+    def validate_language_code(cls, v):
+        allowed_languages = ["en", "hi", "ta"]
+        if v not in allowed_languages:
+            raise ValueError(f'Language code must be one of: {", ".join(allowed_languages)}')
+        return v
+
+class UserLanguagePreferenceCreate(BaseModel):
+    language_code: str
+    
+    @validator('language_code')
+    def validate_language_code(cls, v):
+        allowed_languages = ["en", "hi", "ta"]
+        if v not in allowed_languages:
+            raise ValueError(f'Language code must be one of: {", ".join(allowed_languages)}')
+        return v
+
+# Festival & Cultural Models
+class Festival(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    name_hi: str
+    name_ta: str
+    description: str
+    description_hi: str
+    description_ta: str
+    date: datetime
+    festival_type: str  # "national", "regional", "religious", "modern"
+    region: Optional[str] = None  # "all", "north", "south", "east", "west"
+    typical_expenses: List[str] = []  # Common expense categories for this festival
+    budget_suggestions: Dict[str, int] = {}  # Suggested amounts for different categories
+    is_active: bool = True
+    icon: str = "🎉"
+    
+    @validator('festival_type')
+    def validate_festival_type(cls, v):
+        allowed_types = ["national", "regional", "religious", "modern"]
+        if v not in allowed_types:
+            raise ValueError(f'Festival type must be one of: {", ".join(allowed_types)}')
+        return v
+
+class UserFestivalBudget(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    festival_id: str
+    total_budget: float
+    allocated_budgets: Dict[str, float] = {}  # Category-wise allocation
+    spent_amounts: Dict[str, float] = {}  # Category-wise spending
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    is_active: bool = True
+
+class UserFestivalBudgetCreate(BaseModel):
+    festival_id: str
+    total_budget: float
+    allocated_budgets: Dict[str, float] = {}
+
+# Challenge System Models
+class Challenge(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    name_hi: str
+    name_ta: str
+    description: str
+    description_hi: str
+    description_ta: str
+    challenge_type: str  # "saving", "earning", "streak", "social"
+    target_value: float  # Target amount or count
+    target_unit: str  # "rupees", "days", "transactions", "referrals"
+    duration_days: int
+    reward_coins: int
+    start_date: datetime
+    end_date: datetime
+    is_active: bool = True
+    difficulty: str = "medium"
+    icon: str = "🎯"
+    
+    @validator('challenge_type')
+    def validate_challenge_type(cls, v):
+        allowed_types = ["saving", "earning", "streak", "social", "cultural"]
+        if v not in allowed_types:
+            raise ValueError(f'Challenge type must be one of: {", ".join(allowed_types)}')
+        return v
+
+class UserChallenge(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    challenge_id: str
+    current_progress: float = 0.0
+    status: str = "active"  # "active", "completed", "failed", "abandoned"
+    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    completed_at: Optional[datetime] = None
+    reward_claimed: bool = False
+    
+    @validator('status')
+    def validate_status(cls, v):
+        allowed_statuses = ["active", "completed", "failed", "abandoned"]
+        if v not in allowed_statuses:
+            raise ValueError(f'Status must be one of: {", ".join(allowed_statuses)}')
+        return v
+
+class UserChallengeCreate(BaseModel):
+    challenge_id: str

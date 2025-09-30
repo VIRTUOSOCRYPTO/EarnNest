@@ -2117,16 +2117,16 @@ async def fetch_karnataka_hospitals(latitude, longitude, emergency_type, special
     # Sort by distance (closest first)
     hospitals_with_distance.sort(key=lambda x: x["calculated_distance"])
     
-    # Filter hospitals based on distance and emergency type
+    # Filter hospitals based on distance and emergency type - STRICT 25km limit
     relevant_hospitals = []
-    max_initial_radius = 25  # Start with 25km
-    extended_radius = 100    # Extend to 100km if needed for minimum count
+    max_radius = 25  # STRICT 25km limit as requested by user
     
-    # First pass: Get hospitals within 25km
+    # Get hospitals within 25km ONLY - do not extend beyond this limit
     for hospital in hospitals_with_distance:
         distance = hospital["calculated_distance"]
         
-        if distance <= max_initial_radius:
+        # ONLY include hospitals within 25km radius
+        if distance <= max_radius:
             # Calculate specialty match score
             specialty_match_score = 0
             matched_specialties = []
@@ -2161,53 +2161,6 @@ async def fetch_karnataka_hospitals(latitude, longitude, emergency_type, special
                 "district": hospital.get("district", "Karnataka")
             }
             relevant_hospitals.append(hospital_data)
-    
-    # If less than 10 hospitals within 25km, extend search radius
-    if len(relevant_hospitals) < 10:
-        logger.info(f"Only {len(relevant_hospitals)} hospitals within 25km, extending search to {extended_radius}km")
-        
-        for hospital in hospitals_with_distance:
-            distance = hospital["calculated_distance"]
-            
-            # Skip if already added or still within initial radius
-            if distance <= max_initial_radius:
-                continue
-                
-            if distance <= extended_radius and len(relevant_hospitals) < 15:
-                # Calculate specialty match score
-                specialty_match_score = 0
-                matched_specialties = []
-                
-                if specialty_info and hospital.get("specialties"):
-                    primary_specialties = specialty_info.get("primary_specialties", [])
-                    secondary_specialties = specialty_info.get("secondary_specialties", [])
-                    
-                    for spec in hospital["specialties"]:
-                        if spec in primary_specialties:
-                            specialty_match_score += 3
-                            matched_specialties.append(spec)
-                        elif spec in secondary_specialties:
-                            specialty_match_score += 1
-                            matched_specialties.append(spec)
-                
-                # Format hospital data
-                hospital_data = {
-                    "name": hospital["name"],
-                    "address": hospital["address"],
-                    "phone": hospital["phone"],
-                    "emergency_phone": hospital.get("emergency_phone", "108"),
-                    "distance": f"{distance:.1f} km",
-                    "rating": hospital.get("rating", 4.2),
-                    "specialties": hospital.get("specialties", []),
-                    "matched_specialties": matched_specialties,
-                    "specialty_match_score": specialty_match_score,
-                    "features": hospital.get("features", ["Emergency Services", "Government Approved"]),
-                    "estimated_time": f"{int(distance * 2.5)}-{int(distance * 3.5)} minutes",
-                    "hospital_type": "Government Approved Hospital",
-                    "data_source": "karnataka_approved",
-                    "district": hospital.get("district", "Karnataka")
-                }
-                relevant_hospitals.append(hospital_data)
     
     # Sort by specialty match score first, then by distance
     relevant_hospitals.sort(key=lambda x: (-x["specialty_match_score"], float(x["distance"].split()[0])))
@@ -2352,107 +2305,101 @@ async def fetch_dynamic_hospitals(latitude, longitude, emergency_type, specialty
         return features
     
     try:
-        # Start with smart radius, but be prepared to expand to 25km if needed
-        initial_radius = get_search_radius(latitude, longitude)
-        max_radius = 25
-        hospitals = []
+        # Use strict 25km radius as requested by user
+        radius = 25
+        logger.info(f"Searching for hospitals within {radius}km of {latitude}, {longitude}")
         
-        for radius in [initial_radius, max_radius] if initial_radius < max_radius else [initial_radius]:
-            logger.info(f"Searching for hospitals within {radius}km of {latitude}, {longitude}")
-            
-            # Build comprehensive Overpass query for hospitals, clinics, and medical centers
-            overpass_query = f'''
-            [out:json][timeout:30];
-            (
-              node["amenity"="hospital"](around:{radius * 1000},{latitude},{longitude});
-              way["amenity"="hospital"](around:{radius * 1000},{latitude},{longitude});
-              relation["amenity"="hospital"](around:{radius * 1000},{latitude},{longitude});
-              node["amenity"="clinic"](around:{radius * 1000},{latitude},{longitude});
-              way["amenity"="clinic"](around:{radius * 1000},{latitude},{longitude});
-              relation["amenity"="clinic"](around:{radius * 1000},{latitude},{longitude});
-              node["healthcare"="hospital"](around:{radius * 1000},{latitude},{longitude});
-              way["healthcare"="hospital"](around:{radius * 1000},{latitude},{longitude});
-              relation["healthcare"="hospital"](around:{radius * 1000},{latitude},{longitude});
-              node["healthcare"="clinic"](around:{radius * 1000},{latitude},{longitude});
-              way["healthcare"="clinic"](around:{radius * 1000},{latitude},{longitude});
-              relation["healthcare"="clinic"](around:{radius * 1000},{latitude},{longitude});
-            );
-            out center meta;
-            '''
-            
-            timeout = aiohttp.ClientTimeout(total=30)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(
-                    'https://overpass-api.de/api/interpreter',
-                    data=overpass_query,
-                    headers={'Content-Type': 'application/x-www-form-urlencoded'}
-                ) as response:
+        # Build comprehensive Overpass query for hospitals, clinics, and medical centers
+        overpass_query = f'''
+        [out:json][timeout:30];
+        (
+          node["amenity"="hospital"](around:{radius * 1000},{latitude},{longitude});
+          way["amenity"="hospital"](around:{radius * 1000},{latitude},{longitude});
+          relation["amenity"="hospital"](around:{radius * 1000},{latitude},{longitude});
+          node["amenity"="clinic"](around:{radius * 1000},{latitude},{longitude});
+          way["amenity"="clinic"](around:{radius * 1000},{latitude},{longitude});
+          relation["amenity"="clinic"](around:{radius * 1000},{latitude},{longitude});
+          node["healthcare"="hospital"](around:{radius * 1000},{latitude},{longitude});
+          way["healthcare"="hospital"](around:{radius * 1000},{latitude},{longitude});
+          relation["healthcare"="hospital"](around:{radius * 1000},{latitude},{longitude});
+          node["healthcare"="clinic"](around:{radius * 1000},{latitude},{longitude});
+          way["healthcare"="clinic"](around:{radius * 1000},{latitude},{longitude});
+          relation["healthcare"="clinic"](around:{radius * 1000},{latitude},{longitude});
+        );
+        out center meta;
+        '''
+        
+        timeout = aiohttp.ClientTimeout(total=30)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post(
+                'https://overpass-api.de/api/interpreter',
+                data=overpass_query,
+                headers={'Content-Type': 'application/x-www-form-urlencoded'}
+            ) as response:
+                
+                if response.status != 200:
+                    logger.warning(f"Overpass API returned status {response.status}")
+                    raise Exception(f"Overpass API returned status {response.status}")
+                
+                data = await response.json()
+                
+                if not data.get('elements'):
+                    logger.info(f"No hospitals found within {radius}km")
+                    raise Exception("No hospitals found in the area")
+                
+                hospitals = []
+                for element in data['elements']:
+                    # Get coordinates
+                    lat = element.get('lat') or (element.get('center') and element['center'].get('lat'))
+                    lon = element.get('lon') or (element.get('center') and element['center'].get('lon'))
                     
-                    if response.status != 200:
-                        logger.warning(f"Overpass API returned status {response.status}")
+                    if not lat or not lon:
                         continue
                     
-                    data = await response.json()
+                    tags = element.get('tags', {})
+                    hospital_name = tags.get('name', 'Hospital')
                     
-                    if not data.get('elements'):
-                        logger.info(f"No hospitals found within {radius}km")
+                    # Skip if no proper name
+                    if not hospital_name or hospital_name == 'Hospital':
                         continue
                     
-                    hospitals = []
-                    for element in data['elements']:
-                        # Get coordinates
-                        lat = element.get('lat') or (element.get('center') and element['center'].get('lat'))
-                        lon = element.get('lon') or (element.get('center') and element['center'].get('lon'))
-                        
-                        if not lat or not lon:
-                            continue
-                        
-                        tags = element.get('tags', {})
-                        hospital_name = tags.get('name', 'Hospital')
-                        
-                        # Skip if no proper name
-                        if not hospital_name or hospital_name == 'Hospital':
-                            continue
-                        
-                        # Calculate distance
-                        distance = calculate_distance(latitude, longitude, lat, lon)
-                        
-                        # Extract specialties and features
-                        specialties = extract_specialties(tags)
-                        features = extract_features(tags)
-                        
-                        hospital_data = {
-                            "name": hospital_name,
-                            "address": format_address(tags),
-                            "phone": tags.get('phone') or tags.get('contact:phone') or "Contact hospital directly",
-                            "emergency_phone": "108",
-                            "distance": f"{distance:.1f} km",
-                            "rating": 4.0,  # Default rating since OSM doesn't have ratings
-                            "specialties": specialties,
-                            "features": features,
-                            "estimated_time": f"{int(distance * 3)}-{int(distance * 4)} minutes",  # Rough estimate
-                            "hospital_type": "Hospital" if tags.get('amenity') == 'hospital' else "Clinic",
-                            "latitude": lat,
-                            "longitude": lon,
-                            "distance_km": distance
-                        }
-                        
-                        hospitals.append(hospital_data)
-            
-            # If we found enough hospitals or reached max radius, break
-            if len(hospitals) >= 5 or radius == max_radius:
-                break
+                    # Calculate distance and ensure it's within 25km
+                    distance = calculate_distance(latitude, longitude, lat, lon)
+                    if distance > 25:  # Strict 25km limit
+                        continue
+                    
+                    # Extract specialties and features
+                    specialties = extract_specialties(tags)
+                    features = extract_features(tags)
+                    
+                    hospital_data = {
+                        "name": hospital_name,
+                        "address": format_address(tags),
+                        "phone": tags.get('phone') or tags.get('contact:phone') or "Contact hospital directly",
+                        "emergency_phone": "108",
+                        "distance": f"{distance:.1f} km",
+                        "rating": 4.0,  # Default rating since OSM doesn't have ratings
+                        "specialties": specialties,
+                        "features": features,
+                        "estimated_time": f"{int(distance * 3)}-{int(distance * 4)} minutes",  # Rough estimate
+                        "hospital_type": "Hospital" if tags.get('amenity') == 'hospital' else "Clinic",
+                        "latitude": lat,
+                        "longitude": lon,
+                        "distance_km": distance
+                    }
+                    
+                    hospitals.append(hospital_data)
         
         # If no hospitals found, raise exception
         if not hospitals:
-            raise Exception("No hospitals found in the area")
+            raise Exception("No hospitals found within 25km")
         
-        # Sort by distance and take closest hospitals
+        # Sort by distance and take closest hospitals within 25km
         hospitals.sort(key=lambda x: x["distance_km"])
         
         # Score hospitals based on specialty match
         scored_hospitals = []
-        for hospital in hospitals[:15]:  # Consider top 15 closest
+        for hospital in hospitals:  # Use all hospitals found within 25km
             match_score = 0
             hospital_specialties = set(hospital["specialties"])
             
@@ -2465,7 +2412,7 @@ async def fetch_dynamic_hospitals(latitude, longitude, emergency_type, specialty
                 if specialty in hospital_specialties:
                     match_score += 1  # Lower weight for secondary specialties
             
-            # Always include hospitals with emergency medicine
+            # Always include hospitals with emergency medicine or positive match
             if match_score > 0 or "Emergency Medicine" in hospital_specialties:
                 hospital_copy = hospital.copy()
                 hospital_copy["specialty_match_score"] = match_score
@@ -2483,6 +2430,8 @@ async def fetch_dynamic_hospitals(latitude, longitude, emergency_type, specialty
         # Sort by specialty match score first, then by distance
         scored_hospitals.sort(key=lambda x: (-x["specialty_match_score"], float(x["distance"].split()[0])))
         
+        # Return hospitals within 25km (no minimum requirement)
+        return scored_hospitals
                 
     except Exception as e:
         logger.error(f"Dynamic hospital fetch error: {str(e)}")
@@ -2622,33 +2571,20 @@ async def get_emergency_hospitals_endpoint(
         except Exception as e:
             logger.warning(f"Dynamic hospital fetch failed: {str(e)}")
         
-        # Ensure minimum 10 hospitals if we have any results
+        # Ensure we have hospitals and sort them properly
         if all_hospitals:
             # Sort all hospitals by specialty match score and distance
             all_hospitals.sort(key=lambda x: (-x.get("specialty_match_score", 0), float(x["distance"].split()[0])))
             
-            # If we have less than 10 hospitals, extend search radius and try again
-            if len(all_hospitals) < 10:
-                logger.info(f"Only found {len(all_hospitals)} hospitals, extending search for minimum 10")
-                
-                # If in Karnataka, try getting more hospitals with extended radius
-                if is_in_karnataka(latitude, longitude):
-                    try:
-                        extended_karnataka = await fetch_karnataka_hospitals(latitude, longitude, emergency_type, specialty_info)
-                        # This function already handles extended radius internally
-                        all_hospitals = extended_karnataka
-                    except Exception as e:
-                        logger.warning(f"Extended Karnataka search failed: {str(e)}")
-            
-            # Return at least 10 hospitals, but limit to 15 for performance
-            result_hospitals = all_hospitals[:15] if len(all_hospitals) >= 10 else all_hospitals
+            # Return hospitals within 25km only - limit to 15 for performance
+            result_hospitals = all_hospitals[:15]
             
             return {
                 "hospitals": result_hospitals,
                 "emergency_type": emergency_type,
                 "location": {"latitude": latitude, "longitude": longitude},
                 "emergency_helpline": "108",
-                "message": f"Found {len(result_hospitals)} hospitals for {emergency_type} emergency" + 
+                "message": f"Found {len(result_hospitals)} hospitals within 25km for {emergency_type} emergency" + 
                           (" (Karnataka approved + live data)" if is_in_karnataka(latitude, longitude) else " (live data)"),
                 "data_source": "enhanced" if is_in_karnataka(latitude, longitude) else "dynamic"
             }

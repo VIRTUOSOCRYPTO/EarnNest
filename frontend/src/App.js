@@ -23,6 +23,9 @@ import Achievements from './components/Achievements';
 import Festivals from './components/Festivals';
 import Challenges from './components/Challenges';
 
+// Real-time Components
+import RealTimeNotifications from './components/RealTimeNotifications';
+
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
@@ -122,6 +125,7 @@ function App() {
       <BrowserRouter>
         <div className="App min-h-screen bg-gradient-to-br from-emerald-50 via-white to-blue-50 flex flex-col">
           {user && <Navigation />}
+          {user && <RealTimeNotifications />}
           <main className="flex-grow">
             <Routes>
               <Route 

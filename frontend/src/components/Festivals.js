@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth, formatCurrency } from '../App';
 import { getTranslation } from '../translations';
+import { useWebSocket } from '../hooks/useWebSocket';
 import { 
   CalendarDaysIcon,
   PlusIcon,
@@ -16,6 +17,7 @@ const API = `${BACKEND_URL}/api`;
 
 const Festivals = () => {
   const { user } = useAuth();
+  const { isConnected } = useWebSocket();
   const [festivals, setFestivals] = useState([]);
   const [userBudgets, setUserBudgets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -26,6 +28,7 @@ const Festivals = () => {
     allocated_budgets: {}
   });
   const [language, setLanguage] = useState(user?.preferred_language || 'en');
+  const [countdowns, setCountdowns] = useState({});
 
   const t = (category, key) => getTranslation(category, key, language);
 
@@ -33,6 +36,46 @@ const Festivals = () => {
     fetchFestivals();
     fetchUserBudgets();
   }, []);
+
+  // Real-time countdown timer
+  useEffect(() => {
+    const updateCountdowns = () => {
+      const now = new Date();
+      const newCountdowns = {};
+      
+      festivals.forEach(festival => {
+        const festivalDate = new Date(festival.date);
+        const timeDiff = festivalDate.getTime() - now.getTime();
+        
+        if (timeDiff > 0) {
+          const days = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+          const hours = Math.floor((timeDiff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+          const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
+          const seconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
+          
+          newCountdowns[festival.id] = {
+            days,
+            hours,
+            minutes,
+            seconds,
+            totalMs: timeDiff
+          };
+        } else {
+          newCountdowns[festival.id] = null; // Festival has passed
+        }
+      });
+      
+      setCountdowns(newCountdowns);
+    };
+
+    // Update immediately
+    updateCountdowns();
+    
+    // Update every second
+    const interval = setInterval(updateCountdowns, 1000);
+    
+    return () => clearInterval(interval);
+  }, [festivals]);
 
   const fetchFestivals = async () => {
     try {
@@ -220,6 +263,7 @@ const Festivals = () => {
           {festivals.map(festival => {
             const hasExistingBudget = userBudgets.some(budget => budget.festival_id === festival.id);
             const daysUntil = Math.ceil((new Date(festival.date) - new Date()) / (1000 * 60 * 60 * 24));
+            const countdown = countdowns[festival.id];
             
             return (
               <div 
@@ -257,7 +301,15 @@ const Festivals = () => {
                       {new Date(festival.date).toLocaleDateString()}
                     </div>
                     <div className="text-sm font-medium bg-white bg-opacity-20 px-2 py-1 rounded">
-                      {daysUntil > 0 ? `${daysUntil} days` : 'Today'}
+                      {countdown ? (
+                        countdown.days > 0 ? (
+                          `${countdown.days}d ${countdown.hours}h ${countdown.minutes}m`
+                        ) : countdown.hours > 0 ? (
+                          `${countdown.hours}h ${countdown.minutes}m ${countdown.seconds}s`
+                        ) : (
+                          `${countdown.minutes}m ${countdown.seconds}s`
+                        )
+                      ) : daysUntil > 0 ? `${daysUntil} days` : 'Today'}
                     </div>
                   </div>
                 </div>

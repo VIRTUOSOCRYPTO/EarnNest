@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../App';
+import LanguageSelector from './LanguageSelector';
 import { 
   HomeIcon, 
   CreditCardIcon,
@@ -10,7 +11,11 @@ import {
   ArrowRightOnRectangleIcon,
   UserCircleIcon,
   StarIcon,
-  LightBulbIcon
+  LightBulbIcon,
+  GiftIcon,
+  TrophyIcon,
+  UsersIcon,
+  CalendarDaysIcon
 } from '@heroicons/react/24/outline';
 import { formatCurrency } from '../App';
 
@@ -27,6 +32,10 @@ const Navigation = () => {
     { path: '/hustles', label: 'Side Hustles', icon: BriefcaseIcon },
     { path: '/analytics', label: 'Analytics', icon: ChartBarIcon },
     { path: '/recommendations', label: 'Recommendations', icon: LightBulbIcon },
+    { path: '/referrals', label: 'Referrals', icon: UsersIcon },
+    { path: '/achievements', label: 'Achievements', icon: TrophyIcon },
+    { path: '/festivals', label: 'Festivals', icon: GiftIcon },
+    { path: '/challenges', label: 'Challenges', icon: CalendarDaysIcon },
   ];
 
   const handleLogout = () => {
@@ -71,6 +80,14 @@ const Navigation = () => {
 
           {/* User Menu */}
           <div className="flex items-center space-x-2 sm:space-x-4">
+            {/* Language Selector */}
+            <LanguageSelector />
+            
+            {/* EarnCoins Balance */}
+            <div className="hidden sm:flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-600 text-white px-3 py-2 rounded-lg">
+              <span className="text-sm font-medium">💰 {user?.earn_coins_balance || 0} Coins</span>
+            </div>
+
             {/* Mobile Profile Icon - Show only on mobile */}
             <div className="md:hidden">
               <Link to="/profile" className="flex items-center hover:bg-gray-50 rounded-lg p-2 transition-colors">
@@ -100,7 +117,10 @@ const Navigation = () => {
                 )}
                 <div className="text-sm min-w-0 flex-1">
                   <p className="font-semibold text-gray-900 truncate">{user?.full_name}</p>
-                  <p className="text-gray-500 truncate">{formatCurrency(user?.total_earnings || 0)} earned</p>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-gray-500">{formatCurrency(user?.total_earnings || 0)} earned</span>
+                    <span className="text-orange-600">🔥{user?.daily_login_streak || 0} streak</span>
+                  </div>
                 </div>
               </Link>
             </div>

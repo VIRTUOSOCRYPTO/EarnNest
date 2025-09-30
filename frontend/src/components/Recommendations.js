@@ -36,6 +36,26 @@ const Recommendations = () => {
   const [selectedMedicalEmergency, setSelectedMedicalEmergency] = useState('');
   const [customMedicalEmergency, setCustomMedicalEmergency] = useState('');
 
+  // Add error handler for unhandled promise rejections
+  useEffect(() => {
+    const handleUnhandledRejection = (event) => {
+      console.error('❌ Unhandled promise rejection in Recommendations:', event.reason);
+      
+      // If it's a geolocation error, handle it gracefully
+      if (event.reason && (event.reason.code === 1 || event.reason.code === 2 || event.reason.code === 3)) {
+        setLocationError('Location access failed. Please enter location manually.');
+        setShowManualLocation(true);
+        event.preventDefault(); // Prevent the error from being logged to console
+      }
+    };
+
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+    
+    return () => {
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
+  }, []);
+
   const categoryIcons = {
     'Food': ShoppingCartIcon,
     'Transportation': TruckIcon,
@@ -113,51 +133,82 @@ const Recommendations = () => {
   ];
 
   useEffect(() => {
-    fetchAllSuggestions();
-    // Initialize emergency categories
-    setEmergencyTypes(emergencyCategories);
+    try {
+      fetchAllSuggestions();
+      // Initialize emergency categories
+      setEmergencyTypes(emergencyCategories);
+    } catch (error) {
+      console.error('❌ Error initializing Recommendations component:', error);
+      setLoading(false);
+    }
   }, []);
 
   // Emergency services functions removed
 
-  // Get user's current location
+  // Get user's current location with enhanced error handling
   const getUserLocation = async () => {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
-        reject(new Error('Geolocation is not supported by this browser'));
+        const error = new Error('Geolocation is not supported by this browser');
+        setLocationError('Geolocation is not supported by this browser. Please enter location manually.');
+        setShowManualLocation(true);
+        reject(error);
         return;
       }
 
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          const location = {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy
-          };
-          setUserLocation(location);
-          setLocationError('');
-          resolve(location);
+          try {
+            const location = {
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              accuracy: position.coords.accuracy
+            };
+            setUserLocation(location);
+            setLocationError('');
+            console.log('✅ Location obtained successfully:', location);
+            resolve(location);
+          } catch (err) {
+            console.error('❌ Error processing location position:', err);
+            setLocationError('Error processing location data. Please try manual input.');
+            setShowManualLocation(true);
+            reject(err);
+          }
         },
         (error) => {
-          let errorMessage = '';
-          switch (error.code) {
-            case error.PERMISSION_DENIED:
-              errorMessage = 'Location access denied. Please enable location or enter manually.';
-              break;
-            case error.POSITION_UNAVAILABLE:
-              errorMessage = 'Location information unavailable.';
-              break;
-            case error.TIMEOUT:
-              errorMessage = 'Location request timed out.';
-              break;
-            default:
-              errorMessage = 'An unknown error occurred while retrieving location.';
-              break;
+          try {
+            let errorMessage = '';
+            console.error('❌ Geolocation error:', error);
+            
+            switch (error.code) {
+              case 1: // PERMISSION_DENIED
+                errorMessage = 'Location access denied. Please enable location or enter manually.';
+                break;
+              case 2: // POSITION_UNAVAILABLE
+                errorMessage = 'Location information unavailable. Please enter manually.';
+                break;
+              case 3: // TIMEOUT
+                errorMessage = 'Location request timed out. Please enter manually.';
+                break;
+              default:
+                errorMessage = 'Unable to get location. Please enter manually.';
+                break;
+            }
+            
+            setLocationError(errorMessage);
+            setShowManualLocation(true);
+            
+            // Create a standard error object instead of rejecting with the GeolocationPositionError
+            const standardError = new Error(errorMessage);
+            standardError.code = error.code;
+            standardError.originalError = error;
+            reject(standardError);
+          } catch (err) {
+            console.error('❌ Error in geolocation error handler:', err);
+            setLocationError('Location error occurred. Please enter manually.');
+            setShowManualLocation(true);
+            reject(new Error('Location error occurred. Please enter manually.'));
           }
-          setLocationError(errorMessage);
-          setShowManualLocation(true);
-          reject(error);
         },
         { 
           enableHighAccuracy: true, 
@@ -1169,7 +1220,14 @@ const Recommendations = () => {
                 </p>
                 <div className="flex gap-2">
                   <button
-                    onClick={getUserLocation}
+                    onClick={async () => {
+                      try {
+                        await getUserLocation();
+                      } catch (error) {
+                        console.error('❌ Location access failed:', error);
+                        // Error is already handled in getUserLocation, just ensure we don't crash
+                      }
+                    }}
                     className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
                   >
                     📍 Use My Location

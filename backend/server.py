@@ -718,13 +718,15 @@ async def get_available_avatars():
 @limiter.limit("5/minute")
 async def register_user(request: Request, user_data: UserCreate):
     """
-    Direct user registration without email verification
+    Enhanced user registration with viral features
     
     Features:
     - Immediate account activation
     - JWT token provided instantly
-    - Password strength validation
-    - Rate limiting for security
+    - Referral system integration
+    - EarnCoins welcome bonus
+    - Achievement initialization
+    - Daily streak setup
     """
     try:
         # Check if user exists
@@ -748,7 +750,32 @@ async def register_user(request: Request, user_data: UserCreate):
         user_doc["email_verified"] = True  # Direct login without email verification
         user_doc["is_active"] = True  # Activate immediately
         
+        # VIRAL FEATURES: Handle referral if provided
+        referral_bonus_message = ""
+        if user_data.referred_by:
+            from database import complete_referral
+            referral = await complete_referral(user_data.referred_by, user_doc["id"])
+            if referral:
+                referral_bonus_message = " You and your friend both received EarnCoins bonuses!"
+        
         await create_user(user_doc)
+        
+        # VIRAL FEATURES: Initialize user with viral features
+        user_id = user_doc["id"]
+        
+        # 1. Award welcome bonus (25 EarnCoins)
+        from database import award_earn_coins, update_user_streak, award_achievement
+        await award_earn_coins(
+            user_id, 25, "bonus", "Welcome to EarnNest! 🎉", 
+            "EarnNest में आपका स्वागत है! 🎉", "EarnNest க்கு உங்களை வரவேற்கிறோம்! 🎉", 
+            "welcome_bonus"
+        )
+        
+        # 2. Initialize daily login streak
+        await update_user_streak(user_id, "daily_login")
+        
+        # 3. Award "Getting Started" achievement
+        await award_achievement(user_id, "first_transaction", 100.0)
         
         # Create JWT token immediately - no email verification needed
         token = create_jwt_token(user_doc["id"])
@@ -758,10 +785,12 @@ async def register_user(request: Request, user_data: UserCreate):
         user = User(**user_doc)
         
         return {
-            "message": "Registration successful! Welcome to EarnNest - Your journey to financial success starts now!",
+            "message": f"Registration successful! Welcome to EarnNest - Your journey to financial success starts now!{referral_bonus_message}",
             "token": token,
             "user": user.dict(),
-            "email": user_data.email
+            "email": user_data.email,
+            "welcome_bonus": 25,
+            "referral_code": user_doc["referral_code"]
         }
         
     except HTTPException:
@@ -820,6 +849,10 @@ async def login_user(request: Request, login_data: UserLogin):
             }
         )
         
+        # VIRAL FEATURES: Update daily login streak
+        from database import update_user_streak
+        current_streak = await update_user_streak(user_doc["id"], "daily_login")
+        
         # Create JWT token
         token = create_jwt_token(user_doc["id"])
         
@@ -830,7 +863,8 @@ async def login_user(request: Request, login_data: UserLogin):
         return {
             "message": "Login successful",
             "token": token,
-            "user": user.dict()
+            "user": user.dict(),
+            "daily_streak": current_streak
         }
         
     except HTTPException:
@@ -3121,6 +3155,404 @@ async def get_learning_feedback_endpoint(
 
 # Include the router in the main app (after all endpoints are defined)
 app.include_router(api_router)
+
+# ===================================
+# VIRAL FEATURES API ENDPOINTS
+# ===================================
+
+@api_router.get("/viral/referral-stats")
+@limiter.limit("30/minute")
+async def get_user_referral_stats_endpoint(
+    request: Request,
+    user_id: str = Depends(get_current_user)
+):
+    """Get user's referral statistics and leaderboard position"""
+    try:
+        from database import get_referral_stats, get_user_referrals
+        
+        stats = await get_referral_stats(user_id)
+        referrals = await get_user_referrals(user_id)
+        
+        # Get user's referral code
+        user = await get_user_by_id(user_id)
+        
+        return {
+            "success": True,
+            "referral_code": user["referral_code"],
+            "stats": stats,
+            "recent_referrals": referrals[-5:] if referrals else [],
+            "total_referrals": len(referrals)
+        }
+        
+    except Exception as e:
+        logger.error(f"Get referral stats error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get referral stats")
+
+@api_router.post("/viral/send-referral")
+@limiter.limit("20/minute")
+async def send_referral_endpoint(
+    request: Request,
+    referral_data: dict,
+    user_id: str = Depends(get_current_user)
+):
+    """Send referral invitation"""
+    try:
+        from database import create_referral
+        
+        user = await get_user_by_id(user_id)
+        referral = await create_referral(user_id, referral_data.get("referee_email"))
+        
+        # TODO: Send invitation email/SMS here
+        
+        return {
+            "success": True,
+            "message": "Referral invitation sent successfully!",
+            "referral_code": user["referral_code"],
+            "referral_link": f"https://earnnest.com/register?ref={user['referral_code']}"
+        }
+        
+    except Exception as e:
+        logger.error(f"Send referral error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to send referral")
+
+@api_router.get("/viral/earncoins/balance")
+@limiter.limit("30/minute")
+async def get_earncoins_balance_endpoint(
+    request: Request,
+    user_id: str = Depends(get_current_user)
+):
+    """Get user's EarnCoins balance and recent transactions"""
+    try:
+        from database import get_user_coin_transactions
+        
+        user = await get_user_by_id(user_id)
+        transactions = await get_user_coin_transactions(user_id, 20)
+        
+        return {
+            "success": True,
+            "balance": user.get("earn_coins_balance", 0),
+            "total_earned": user.get("total_earn_coins_earned", 0),
+            "recent_transactions": transactions
+        }
+        
+    except Exception as e:
+        logger.error(f"Get EarnCoins balance error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get EarnCoins balance")
+
+@api_router.get("/viral/achievements")
+@limiter.limit("30/minute")
+async def get_achievements_endpoint(
+    request: Request,
+    user_id: str = Depends(get_current_user)
+):
+    """Get all available achievements and user's progress"""
+    try:
+        from database import get_all_achievements, get_user_achievements
+        
+        all_achievements = await get_all_achievements()
+        user_achievements = await get_user_achievements(user_id)
+        
+        # Map user achievements for quick lookup
+        earned_achievement_ids = {ua["achievement_id"] for ua in user_achievements}
+        
+        # Add earned status to all achievements
+        for achievement in all_achievements:
+            achievement["earned"] = achievement["id"] in earned_achievement_ids
+        
+        return {
+            "success": True,
+            "all_achievements": all_achievements,
+            "user_achievements": user_achievements,
+            "total_earned": len(user_achievements)
+        }
+        
+    except Exception as e:
+        logger.error(f"Get achievements error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get achievements")
+
+@api_router.get("/viral/streaks")
+@limiter.limit("30/minute")
+async def get_user_streaks_endpoint(
+    request: Request,
+    user_id: str = Depends(get_current_user)
+):
+    """Get user's streaks and daily statistics"""
+    try:
+        from database import get_user_streaks, update_user_streak
+        
+        # Update daily login streak
+        await update_user_streak(user_id, "daily_login")
+        
+        streaks = await get_user_streaks(user_id)
+        user = await get_user_by_id(user_id)
+        
+        return {
+            "success": True,
+            "streaks": streaks,
+            "daily_login_streak": user.get("daily_login_streak", 0),
+            "longest_streak": user.get("longest_login_streak", 0)
+        }
+        
+    except Exception as e:
+        logger.error(f"Get streaks error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get streaks")
+
+@api_router.get("/viral/festivals")
+@limiter.limit("30/minute")
+async def get_festivals_endpoint(
+    request: Request,
+    upcoming_only: bool = True
+):
+    """Get festivals (upcoming or all)"""
+    try:
+        from database import get_upcoming_festivals, get_all_festivals
+        
+        if upcoming_only:
+            festivals = await get_upcoming_festivals(60)  # Next 2 months
+        else:
+            festivals = await get_all_festivals()
+        
+        return {
+            "success": True,
+            "festivals": festivals,
+            "count": len(festivals)
+        }
+        
+    except Exception as e:
+        logger.error(f"Get festivals error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get festivals")
+
+@api_router.post("/viral/festival-budget")
+@limiter.limit("20/minute")
+async def create_festival_budget_endpoint(
+    request: Request,
+    budget_data: dict,
+    user_id: str = Depends(get_current_user)
+):
+    """Create or update festival budget"""
+    try:
+        from database import create_user_festival_budget
+        
+        budget = await create_user_festival_budget(
+            user_id, 
+            budget_data["festival_id"], 
+            {
+                "total_budget": budget_data["total_budget"],
+                "allocated_budgets": budget_data.get("allocated_budgets", {})
+            }
+        )
+        
+        return {
+            "success": True,
+            "budget": budget,
+            "message": "Festival budget created successfully!"
+        }
+        
+    except Exception as e:
+        logger.error(f"Create festival budget error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create festival budget")
+
+@api_router.get("/viral/festival-budgets")
+@limiter.limit("30/minute")
+async def get_user_festival_budgets_endpoint(
+    request: Request,
+    user_id: str = Depends(get_current_user)
+):
+    """Get user's festival budgets"""
+    try:
+        from database import get_user_festival_budgets
+        
+        budgets = await get_user_festival_budgets(user_id)
+        
+        return {
+            "success": True,
+            "budgets": budgets,
+            "count": len(budgets)
+        }
+        
+    except Exception as e:
+        logger.error(f"Get festival budgets error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get festival budgets")
+
+@api_router.get("/viral/challenges")
+@limiter.limit("30/minute")
+async def get_challenges_endpoint(
+    request: Request,
+    user_id: str = Depends(get_current_user)
+):
+    """Get active challenges and user's participation"""
+    try:
+        from database import get_active_challenges, get_user_challenges
+        
+        active_challenges = await get_active_challenges()
+        user_challenges = await get_user_challenges(user_id)
+        
+        # Map user challenges for quick lookup
+        joined_challenge_ids = {uc["challenge_id"] for uc in user_challenges}
+        
+        # Add participation status to challenges
+        for challenge in active_challenges:
+            challenge["joined"] = challenge["id"] in joined_challenge_ids
+        
+        return {
+            "success": True,
+            "active_challenges": active_challenges,
+            "user_challenges": user_challenges,
+            "total_joined": len(user_challenges)
+        }
+        
+    except Exception as e:
+        logger.error(f"Get challenges error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get challenges")
+
+@api_router.post("/viral/join-challenge")
+@limiter.limit("10/minute")
+async def join_challenge_endpoint(
+    request: Request,
+    challenge_data: dict,
+    user_id: str = Depends(get_current_user)
+):
+    """Join a challenge"""
+    try:
+        from database import join_challenge
+        
+        user_challenge = await join_challenge(user_id, challenge_data["challenge_id"])
+        
+        return {
+            "success": True,
+            "user_challenge": user_challenge,
+            "message": "Successfully joined the challenge!"
+        }
+        
+    except Exception as e:
+        logger.error(f"Join challenge error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to join challenge")
+
+@api_router.post("/viral/update-language")
+@limiter.limit("20/minute")
+async def update_language_preference_endpoint(
+    request: Request,
+    language_data: dict,
+    user_id: str = Depends(get_current_user)
+):
+    """Update user's language preference"""
+    try:
+        language_code = language_data.get("language_code", "en")
+        
+        # Validate language code
+        allowed_languages = ["en", "hi", "ta"]
+        if language_code not in allowed_languages:
+            raise HTTPException(status_code=400, detail="Invalid language code")
+        
+        await db.users.update_one(
+            {"id": user_id},
+            {"$set": {"preferred_language": language_code}}
+        )
+        
+        return {
+            "success": True,
+            "language_code": language_code,
+            "message": "Language preference updated successfully!"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Update language preference error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update language preference")
+
+@api_router.get("/viral/language-options")
+@limiter.limit("30/minute")
+async def get_language_options_endpoint(request: Request):
+    """Get available language options"""
+    try:
+        languages = [
+            {"code": "en", "name": "English", "native_name": "English"},
+            {"code": "hi", "name": "Hindi", "native_name": "हिंदी"},
+            {"code": "ta", "name": "Tamil", "native_name": "தமிழ்"}
+        ]
+        
+        return {
+            "success": True,
+            "languages": languages
+        }
+        
+    except Exception as e:
+        logger.error(f"Get language options error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get language options")
+
+@api_router.get("/viral/leaderboard")
+@limiter.limit("30/minute")
+async def get_viral_leaderboard_endpoint(
+    request: Request,
+    category: str = "referrals"
+):
+    """Get leaderboard for various viral metrics"""
+    try:
+        # Leaderboard categories: referrals, coins, achievements, streaks
+        pipeline = []
+        
+        if category == "referrals":
+            pipeline = [
+                {"$match": {"total_referrals": {"$gt": 0}}},
+                {"$sort": {"total_referrals": -1}},
+                {"$limit": 20},
+                {"$project": {
+                    "full_name": 1,
+                    "total_referrals": 1,
+                    "earn_coins_balance": 1,
+                    "avatar": 1
+                }}
+            ]
+        elif category == "coins":
+            pipeline = [
+                {"$match": {"total_earn_coins_earned": {"$gt": 0}}},
+                {"$sort": {"total_earn_coins_earned": -1}},
+                {"$limit": 20},
+                {"$project": {
+                    "full_name": 1,
+                    "total_earn_coins_earned": 1,
+                    "earn_coins_balance": 1,
+                    "avatar": 1
+                }}
+            ]
+        elif category == "achievements":
+            pipeline = [
+                {"$match": {"total_achievements_earned": {"$gt": 0}}},
+                {"$sort": {"total_achievements_earned": -1}},
+                {"$limit": 20},
+                {"$project": {
+                    "full_name": 1,
+                    "total_achievements_earned": 1,
+                    "level": 1,
+                    "avatar": 1
+                }}
+            ]
+        elif category == "streaks":
+            pipeline = [
+                {"$match": {"longest_login_streak": {"$gt": 0}}},
+                {"$sort": {"longest_login_streak": -1}},
+                {"$limit": 20},
+                {"$project": {
+                    "full_name": 1,
+                    "longest_login_streak": 1,
+                    "daily_login_streak": 1,
+                    "avatar": 1
+                }}
+            ]
+        
+        leaderboard = await db.users.aggregate(pipeline).to_list(20)
+        
+        return {
+            "success": True,
+            "category": category,
+            "leaderboard": clean_mongo_doc(leaderboard),
+            "count": len(leaderboard)
+        }
+        
+    except Exception as e:
+        logger.error(f"Get viral leaderboard error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get leaderboard")
 
 # Configure logging
 logging.basicConfig(

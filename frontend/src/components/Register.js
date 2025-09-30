@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../App';
 import { 
@@ -8,7 +8,8 @@ import {
   CheckCircleIcon, 
   XCircleIcon, 
   ShieldCheckIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  GiftIcon
 } from '@heroicons/react/24/outline';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -16,6 +17,12 @@ const API = `${BACKEND_URL}/api`;
 
 const Register = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Extract referral code from URL params
+  const searchParams = new URLSearchParams(location.search);
+  const referralCode = searchParams.get('ref');
+  
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -26,7 +33,8 @@ const Register = () => {
     skills: [],  // Changed to array for better handling
     availability_hours: 10,
     location: '', // MANDATORY - will be required
-    bio: ''
+    bio: '',
+    referred_by: referralCode || ''  // Pre-fill referral code if present
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -293,6 +301,26 @@ const Register = () => {
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 flex items-center">
               <ExclamationTriangleIcon className="w-5 h-5 mr-2" />
               {error}
+            </div>
+          )}
+
+          {/* Referral Bonus Notification */}
+          {formData.referred_by && (
+            <div className="bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-200 rounded-lg p-4 mb-6">
+              <div className="flex items-start gap-3">
+                <GiftIcon className="w-6 h-6 text-emerald-600 mt-1" />
+                <div>
+                  <h3 className="font-semibold text-emerald-800 mb-1">
+                    🎉 Welcome Bonus Ready!
+                  </h3>
+                  <p className="text-emerald-700 text-sm">
+                    You're using referral code <span className="font-mono font-bold bg-emerald-100 px-2 py-1 rounded">{formData.referred_by}</span>
+                  </p>
+                  <p className="text-emerald-600 text-sm mt-1">
+                    Complete registration to get your <span className="font-bold">25 EarnCoins</span> welcome bonus!
+                  </p>
+                </div>
+              </div>
             </div>
           )}
 

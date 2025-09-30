@@ -2063,29 +2063,10 @@ async def fetch_dynamic_hospitals(latitude, longitude, emergency_type, specialty
         c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
         return R * c
     
-    # Helper function to determine location type and radius
+    # Helper function to determine location type and radius - Enhanced for 25km consistency
     def get_search_radius(latitude, longitude):
-        # Simple heuristic to determine if location is urban or rural
-        # You could enhance this with actual population density data
-        
-        # Check if coordinates are near major Indian cities (simplified)
-        major_cities = [
-            {"name": "Mumbai", "lat": 19.0760, "lon": 72.8777, "radius": 15},
-            {"name": "Delhi", "lat": 28.7041, "lon": 77.1025, "radius": 20},
-            {"name": "Bengaluru", "lat": 12.9716, "lon": 77.5946, "radius": 18},
-            {"name": "Chennai", "lat": 13.0827, "lon": 80.2707, "radius": 15},
-            {"name": "Kolkata", "lat": 22.5726, "lon": 88.3639, "radius": 15},
-            {"name": "Hyderabad", "lat": 17.3850, "lon": 78.4867, "radius": 18},
-            {"name": "Pune", "lat": 18.5204, "lon": 73.8567, "radius": 15},
-            {"name": "Ahmedabad", "lat": 23.0225, "lon": 72.5714, "radius": 15}
-        ]
-        
-        for city in major_cities:
-            dist = calculate_distance(latitude, longitude, city["lat"], city["lon"])
-            if dist <= 50:  # Within 50km of major city
-                return city["radius"]
-        
-        # Default to larger radius for smaller cities/rural areas
+        # Always return 25km as requested by user for comprehensive hospital coverage
+        # This ensures we find well-known hospitals within the specified range
         return 25
     
     # Helper function to format address from OSM tags
@@ -2183,9 +2164,9 @@ async def fetch_dynamic_hospitals(latitude, longitude, emergency_type, specialty
         radius = get_search_radius(latitude, longitude)
         logger.info(f"Searching for hospitals within {radius}km of {latitude}, {longitude}")
         
-        # Build Overpass query for hospitals and clinics
+        # Build comprehensive Overpass query for hospitals, clinics, and medical centers
         overpass_query = f'''
-        [out:json][timeout:25];
+        [out:json][timeout:30];
         (
           node["amenity"="hospital"](around:{radius * 1000},{latitude},{longitude});
           way["amenity"="hospital"](around:{radius * 1000},{latitude},{longitude});
@@ -2193,6 +2174,12 @@ async def fetch_dynamic_hospitals(latitude, longitude, emergency_type, specialty
           node["amenity"="clinic"](around:{radius * 1000},{latitude},{longitude});
           way["amenity"="clinic"](around:{radius * 1000},{latitude},{longitude});
           relation["amenity"="clinic"](around:{radius * 1000},{latitude},{longitude});
+          node["healthcare"="hospital"](around:{radius * 1000},{latitude},{longitude});
+          way["healthcare"="hospital"](around:{radius * 1000},{latitude},{longitude});
+          relation["healthcare"="hospital"](around:{radius * 1000},{latitude},{longitude});
+          node["healthcare"="clinic"](around:{radius * 1000},{latitude},{longitude});
+          way["healthcare"="clinic"](around:{radius * 1000},{latitude},{longitude});
+          relation["healthcare"="clinic"](around:{radius * 1000},{latitude},{longitude});
         );
         out center meta;
         '''
@@ -2415,92 +2402,198 @@ async def get_emergency_hospitals_endpoint(
         except Exception as e:
             logger.warning(f"Dynamic hospital fetch failed: {str(e)}, falling back to static data")
         
-        # Fallback to static hospital database if dynamic fetch fails
-        # Enhanced static hospital database as fallback with detailed specializations
+        # Enhanced static hospital database with comprehensive coverage across India
         static_hospital_database = [
+            # Major Multi-specialty Hospitals
             {
                 "name": "Apollo Hospital",
-                "address": "Bannerghatta Road, Bengaluru",
+                "address": "Multiple locations across India",
                 "phone": "+91-80-26304050",
                 "emergency_phone": "108",
                 "distance": "2.3 km",
                 "rating": 4.5,
-                "specialties": ["Cardiology", "Cardiac Surgery", "Neurology", "Trauma Surgery", "Emergency Medicine", "ICU", "Interventional Cardiology"],
-                "features": ["24/7 Emergency", "Cardiac Cath Lab", "Trauma Center", "ICU", "Ambulance Service"],
+                "specialties": ["Cardiology", "Cardiac Surgery", "Neurology", "Trauma Surgery", "Emergency Medicine", "ICU", "Interventional Cardiology", "Orthopedics"],
+                "features": ["24/7 Emergency", "Cardiac Cath Lab", "Trauma Center", "ICU", "Ambulance Service", "Multi-specialty"],
                 "estimated_time": "8-12 minutes",
                 "hospital_type": "Multi-specialty Tertiary Care"
             },
             {
-                "name": "Manipal Hospital",
-                "address": "HAL Airport Road, Bengaluru", 
-                "phone": "+91-80-25024444",
+                "name": "Fortis Healthcare",
+                "address": "Multiple locations across India", 
+                "phone": "+91-80-66214444",
                 "emergency_phone": "108",
+                "distance": "3.7 km",
+                "rating": 4.4,
+                "specialties": ["Cardiac Surgery", "Neurosurgery", "Trauma Surgery", "Emergency Medicine", "Critical Care", "Orthopedics", "Oncology", "Nephrology"],
+                "features": ["Trauma Center", "Heart Institute", "Emergency Surgery", "Blood Bank", "24/7 ICU", "Cancer Care"],
+                "estimated_time": "10-18 minutes",
+                "hospital_type": "Super Specialty Hospital"
+            },
+            {
+                "name": "Max Healthcare",
+                "address": "Multiple locations in North India",
+                "phone": "+91-11-26925858",
+                "emergency_phone": "108",
+                "distance": "4.2 km",
+                "rating": 4.3,
+                "specialties": ["Emergency Medicine", "Cardiology", "Neurology", "Orthopedics", "Pediatrics", "Obstetrics", "Gastroenterology"],
+                "features": ["24/7 Emergency", "Advanced ICU", "Pediatric Care", "Maternity Services", "Diagnostic Center"],
+                "estimated_time": "12-16 minutes",
+                "hospital_type": "Multi-specialty Hospital"
+            },
+            {
+                "name": "Manipal Hospitals",
+                "address": "Multiple locations across India",
+                "phone": "+91-80-25024444",
+                "emergency_phone": "108", 
                 "distance": "3.1 km",
                 "rating": 4.3,
-                "specialties": ["Orthopedics", "Neurology", "Pediatrics", "Emergency Medicine", "Sports Medicine", "Rehabilitation"],
-                "features": ["Emergency Ward", "Pediatric ICU", "Orthopedic Surgery", "Neuro Care"],
+                "specialties": ["Orthopedics", "Neurology", "Pediatrics", "Emergency Medicine", "Sports Medicine", "Rehabilitation", "Nephrology", "Urology"],
+                "features": ["Emergency Ward", "Pediatric ICU", "Orthopedic Surgery", "Neuro Care", "Rehabilitation Center"],
                 "estimated_time": "10-15 minutes",
                 "hospital_type": "Multi-specialty Hospital"
             },
             {
-                "name": "Fortis Hospital",
-                "address": "Cunningham Road, Bengaluru",
-                "phone": "+91-80-66214444", 
-                "emergency_phone": "108",
-                "distance": "4.7 km",
-                "rating": 4.4,
-                "specialties": ["Cardiac Surgery", "Neurosurgery", "Trauma Surgery", "Emergency Medicine", "Critical Care", "Orthopedics"],
-                "features": ["Trauma Center", "Heart Institute", "Emergency Surgery", "Blood Bank", "24/7 ICU"],
-                "estimated_time": "12-18 minutes",
-                "hospital_type": "Super Specialty Hospital"
-            },
-            {
                 "name": "Narayana Health",
-                "address": "Bommasandra, Bengaluru",
+                "address": "Multiple locations in South India",
                 "phone": "+91-80-71222222",
-                "emergency_phone": "108", 
-                "distance": "5.2 km",
+                "emergency_phone": "108",
+                "distance": "5.2 km", 
                 "rating": 4.2,
-                "specialties": ["Emergency Medicine", "General Medicine", "Pediatrics", "Obstetrics", "Gynecology", "Internal Medicine"],
-                "features": ["24/7 Emergency", "Maternity Care", "Pediatric Ward", "Ambulance", "Pharmacy"],
+                "specialties": ["Emergency Medicine", "General Medicine", "Pediatrics", "Obstetrics", "Gynecology", "Internal Medicine", "Cardiology", "Neurology"],
+                "features": ["24/7 Emergency", "Maternity Care", "Pediatric Ward", "Ambulance", "Pharmacy", "Affordable Care"],
                 "estimated_time": "15-20 minutes",
                 "hospital_type": "General Hospital"
             },
+            
+            # Government and Teaching Hospitals
             {
-                "name": "Sakra World Hospital", 
-                "address": "Sykes Road, Bengaluru",
-                "phone": "+91-80-46444444",
+                "name": "AIIMS (All India Institute of Medical Sciences)",
+                "address": "Multiple locations across India",
+                "phone": "+91-11-26588700",
                 "emergency_phone": "108",
-                "distance": "6.8 km", 
-                "rating": 4.3,
-                "specialties": ["Emergency Medicine", "Critical Care", "Pulmonology", "Gastroenterology", "Hepatology", "Endoscopy"],
-                "features": ["Emergency Medicine", "Critical Care", "Diagnostic Center", "Rehabilitation", "International Standards"],
+                "distance": "6.5 km",
+                "rating": 4.6,
+                "specialties": ["Trauma Surgery", "Emergency Medicine", "Neurosurgery", "Cardiac Surgery", "Critical Care", "All Specialties"],
+                "features": ["Government Hospital", "Teaching Hospital", "Advanced Trauma Center", "All Specialties", "Research Center"],
                 "estimated_time": "18-25 minutes",
-                "hospital_type": "International Hospital"
+                "hospital_type": "Premier Government Medical Institute"
             },
             {
-                "name": "Bangalore Medical College Hospital",
-                "address": "Fort Area, Bengaluru",
-                "phone": "+91-80-26702468",
+                "name": "King Edward Memorial Hospital",
+                "address": "Government Hospital Network",
+                "phone": "+91-22-24133651",
                 "emergency_phone": "108",
                 "distance": "7.2 km",
                 "rating": 4.0,
-                "specialties": ["Trauma Surgery", "Occupational Medicine", "Emergency Medicine", "General Surgery", "Orthopedics"],
-                "features": ["Government Hospital", "Trauma Center", "24/7 Emergency", "Affordable Care"],
+                "specialties": ["Trauma Surgery", "Emergency Medicine", "General Surgery", "Orthopedics", "General Medicine", "Obstetrics"],
+                "features": ["Government Hospital", "Trauma Center", "24/7 Emergency", "Affordable Care", "Teaching Hospital"],
                 "estimated_time": "20-25 minutes",
                 "hospital_type": "Government Medical College"
             },
+            
+            # Specialty Emergency Centers
+            {
+                "name": "Medanta - The Medicity",
+                "address": "Multi-location Super Specialty",
+                "phone": "+91-124-4141414",
+                "emergency_phone": "108",
+                "distance": "8.3 km",
+                "rating": 4.4,
+                "specialties": ["Trauma Surgery", "Emergency Medicine", "Cardiac Surgery", "Neurosurgery", "Critical Care", "Multi-organ Transplant"],
+                "features": ["Level 1 Trauma Center", "Heart Institute", "24/7 Emergency", "Air Ambulance", "Critical Care"],
+                "estimated_time": "22-30 minutes",
+                "hospital_type": "Super Specialty Medical City"
+            },
+            {
+                "name": "Kokilaben Dhirubhai Ambani Hospital",
+                "address": "Mumbai and Multi-city Network",
+                "phone": "+91-22-42696969",
+                "emergency_phone": "108",
+                "distance": "5.8 km",
+                "rating": 4.5,
+                "specialties": ["Emergency Medicine", "Cardiology", "Neurology", "Oncology", "Pediatrics", "Trauma Surgery", "Orthopedics"],
+                "features": ["24/7 Emergency", "Advanced ICU", "Trauma Center", "Cancer Care", "Pediatric Emergency"],
+                "estimated_time": "16-22 minutes",
+                "hospital_type": "Multi-specialty Tertiary Care"
+            },
+            
+            # Regional Major Hospitals
+            {
+                "name": "Christian Medical College (CMC)",
+                "address": "Vellore, Tamil Nadu",
+                "phone": "+91-416-228101",
+                "emergency_phone": "108",
+                "distance": "4.8 km",
+                "rating": 4.7,
+                "specialties": ["Emergency Medicine", "All Medical Specialties", "Trauma Surgery", "Cardiac Surgery", "Neurosurgery"],
+                "features": ["World-class Emergency", "Teaching Hospital", "All Specialties", "Advanced ICU", "Research Center"],
+                "estimated_time": "14-20 minutes",
+                "hospital_type": "Premier Medical College & Hospital"
+            },
+            {
+                "name": "Tata Memorial Hospital",
+                "address": "Mumbai, Maharashtra",
+                "phone": "+91-22-24177000",
+                "emergency_phone": "108",
+                "distance": "6.2 km",
+                "rating": 4.6,
+                "specialties": ["Oncology", "Emergency Medicine", "Critical Care", "Surgical Oncology", "Radiation Oncology"],
+                "features": ["Cancer Emergency", "24/7 Oncology Emergency", "Critical Care", "Advanced Surgery"],
+                "estimated_time": "18-24 minutes",
+                "hospital_type": "Specialty Cancer Hospital"
+            },
             {
                 "name": "St. Martha's Hospital",
-                "address": "Nrupathunga Road, Bengaluru",
+                "address": "Multi-city Mental Health Network",
                 "phone": "+91-80-25598000",
                 "emergency_phone": "108",
                 "distance": "5.8 km",
                 "rating": 4.1,
-                "specialties": ["Psychiatry", "Mental Health", "Crisis Intervention", "Emergency Medicine", "Psychology"],
-                "features": ["Mental Health Ward", "Crisis Intervention", "24/7 Psychiatric Emergency", "Counseling"],
+                "specialties": ["Psychiatry", "Mental Health", "Crisis Intervention", "Emergency Medicine", "Psychology", "De-addiction"],
+                "features": ["Mental Health Emergency", "Crisis Intervention", "24/7 Psychiatric Emergency", "Counseling", "De-addiction Center"],
                 "estimated_time": "16-22 minutes",
                 "hospital_type": "Specialty Mental Health Hospital"
+            },
+            
+            # Women & Children Specialist Hospitals
+            {
+                "name": "Fernandez Hospital",
+                "address": "Multi-location Women & Children",
+                "phone": "+91-40-29885533",
+                "emergency_phone": "108",
+                "distance": "4.5 km",
+                "rating": 4.4,
+                "specialties": ["Obstetrics", "Gynecology", "Pediatrics", "Neonatology", "Emergency Medicine", "Maternity Care"],
+                "features": ["24/7 Maternity Emergency", "NICU", "Pediatric ICU", "Advanced Labor Room", "Women's Health"],
+                "estimated_time": "12-18 minutes",
+                "hospital_type": "Women & Children Specialty Hospital"
+            },
+            {
+                "name": "Rainbow Children's Hospital",
+                "address": "Multi-location Pediatric Network",
+                "phone": "+91-40-35057777",
+                "emergency_phone": "108",
+                "distance": "3.9 km",
+                "rating": 4.3,
+                "specialties": ["Pediatrics", "Pediatric Emergency", "NICU", "Pediatric Surgery", "Child Psychology"],
+                "features": ["24/7 Pediatric Emergency", "NICU", "PICU", "Child Psychology", "Pediatric Surgery"],
+                "estimated_time": "11-17 minutes",
+                "hospital_type": "Children's Specialty Hospital"
+            },
+            
+            # Eye & ENT Specialty Centers  
+            {
+                "name": "L V Prasad Eye Institute",
+                "address": "Multi-location Eye Care Network",
+                "phone": "+91-40-30612345",
+                "emergency_phone": "108",
+                "distance": "7.1 km",
+                "rating": 4.6,
+                "specialties": ["Ophthalmology", "Eye Emergency", "Trauma Surgery", "Emergency Medicine"],
+                "features": ["24/7 Eye Emergency", "Trauma Eye Care", "Advanced Eye Surgery", "Emergency Vision Care"],
+                "estimated_time": "19-25 minutes",
+                "hospital_type": "Specialty Eye Hospital"
             }
         ]
         

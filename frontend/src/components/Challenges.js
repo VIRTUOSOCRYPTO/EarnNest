@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../App';
 import { getTranslation } from '../translations';
+import { useWebSocket } from '../hooks/useWebSocket';
 import { 
   TrophyIcon,
   FireIcon,
@@ -18,17 +19,39 @@ const API = `${BACKEND_URL}/api`;
 
 const Challenges = () => {
   const { user } = useAuth();
+  const { realTimeData, isConnected } = useWebSocket();
   const [activeChallenges, setActiveChallenges] = useState([]);
   const [userChallenges, setUserChallenges] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('available');
   const [language, setLanguage] = useState(user?.preferred_language || 'en');
+  const [liveLeaderboard, setLiveLeaderboard] = useState([]);
 
   const t = (category, key) => getTranslation(category, key, language);
 
   useEffect(() => {
     fetchChallenges();
   }, []);
+
+  // Handle real-time updates
+  useEffect(() => {
+    if (realTimeData.challenges.length > 0) {
+      setUserChallenges(prev => {
+        const updated = [...prev];
+        realTimeData.challenges.forEach(updatedChallenge => {
+          const index = updated.findIndex(c => c.id === updatedChallenge.id);
+          if (index !== -1) {
+            updated[index] = { ...updated[index], ...updatedChallenge };
+          }
+        });
+        return updated;
+      });
+    }
+
+    if (realTimeData.leaderboard.length > 0) {
+      setLiveLeaderboard(realTimeData.leaderboard);
+    }
+  }, [realTimeData.challenges, realTimeData.leaderboard]);
 
   const fetchChallenges = async () => {
     try {

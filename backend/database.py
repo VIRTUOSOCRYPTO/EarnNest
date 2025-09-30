@@ -1,5 +1,5 @@
 from motor.motor_asyncio import AsyncIOMotorClient
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import os
 import logging
 
@@ -118,6 +118,84 @@ async def init_database():
         
         # Transaction suggestions collection indexes
         await db.transaction_suggestions.create_index("user_id")
+        await db.transaction_suggestions.create_index("parsed_transaction_id")
+        await db.transaction_suggestions.create_index("status")
+        await db.transaction_suggestions.create_index("created_at")
+        await db.transaction_suggestions.create_index("confidence_score")
+        
+        # Learning feedback collection indexes
+        await db.learning_feedback.create_index("user_id")
+        await db.learning_feedback.create_index("suggestion_id")
+        await db.learning_feedback.create_index("feedback_type")
+        await db.learning_feedback.create_index("created_at")
+        
+        # VIRAL FEATURES - New indexes
+        
+        # Users collection - add viral feature indexes
+        await db.users.create_index("referral_code", unique=True)
+        await db.users.create_index("referred_by")
+        await db.users.create_index("preferred_language")
+        await db.users.create_index("daily_login_streak")
+        await db.users.create_index("total_referrals")
+        
+        # Referrals collection indexes
+        await db.referrals.create_index("referrer_id")
+        await db.referrals.create_index("referee_id")
+        await db.referrals.create_index("referral_code", unique=True)
+        await db.referrals.create_index("status")
+        await db.referrals.create_index("created_at")
+        
+        # Achievements collection indexes
+        await db.achievements.create_index("category")
+        await db.achievements.create_index("difficulty")
+        await db.achievements.create_index("is_active")
+        await db.achievements.create_index("points_required")
+        
+        # User achievements collection indexes
+        await db.user_achievements.create_index("user_id")
+        await db.user_achievements.create_index("achievement_id")
+        await db.user_achievements.create_index([("user_id", 1), ("achievement_id", 1)], unique=True)
+        await db.user_achievements.create_index("earned_at")
+        await db.user_achievements.create_index("is_claimed")
+        
+        # EarnCoins transactions collection indexes
+        await db.earncoins_transactions.create_index("user_id")
+        await db.earncoins_transactions.create_index("type")
+        await db.earncoins_transactions.create_index("source")
+        await db.earncoins_transactions.create_index("created_at")
+        await db.earncoins_transactions.create_index("reference_id")
+        
+        # User streaks collection indexes
+        await db.user_streaks.create_index("user_id")
+        await db.user_streaks.create_index("streak_type")
+        await db.user_streaks.create_index([("user_id", 1), ("streak_type", 1)], unique=True)
+        await db.user_streaks.create_index("last_activity_date")
+        
+        # Festivals collection indexes
+        await db.festivals.create_index("date")
+        await db.festivals.create_index("festival_type")
+        await db.festivals.create_index("region")
+        await db.festivals.create_index("is_active")
+        
+        # User festival budgets collection indexes
+        await db.user_festival_budgets.create_index("user_id")
+        await db.user_festival_budgets.create_index("festival_id")
+        await db.user_festival_budgets.create_index([("user_id", 1), ("festival_id", 1)])
+        await db.user_festival_budgets.create_index("is_active")
+        
+        # Challenges collection indexes
+        await db.challenges.create_index("challenge_type")
+        await db.challenges.create_index("start_date")
+        await db.challenges.create_index("end_date")
+        await db.challenges.create_index("is_active")
+        await db.challenges.create_index("difficulty")
+        
+        # User challenges collection indexes
+        await db.user_challenges.create_index("user_id")
+        await db.user_challenges.create_index("challenge_id")
+        await db.user_challenges.create_index([("user_id", 1), ("challenge_id", 1)], unique=True)
+        await db.user_challenges.create_index("status")
+        await db.user_challenges.create_index("started_at")
         await db.transaction_suggestions.create_index("parsed_transaction_id")
         await db.transaction_suggestions.create_index("status")
         await db.transaction_suggestions.create_index("created_at")
@@ -599,3 +677,489 @@ async def get_user_transaction_patterns(user_id: str, days: int = 30):
     ]
     
     return await db.transactions.aggregate(pipeline).to_list(50)
+
+# ===================================
+# VIRAL FEATURES DATABASE FUNCTIONS
+# ===================================
+
+# Referral System Functions
+async def create_referral(referrer_id: str, referee_email: str = None):
+    """Create a new referral"""
+    from models import Referral
+    import uuid
+    
+    referral = Referral(
+        referrer_id=referrer_id,
+        referee_email=referee_email,
+        referral_code=str(uuid.uuid4())[:8].upper()
+    )
+    
+    result = await db.referrals.insert_one(referral.dict())
+    return await db.referrals.find_one({"_id": result.inserted_id})
+
+async def get_user_referrals(user_id: str):
+    """Get all referrals made by a user"""
+    referrals = await db.referrals.find({"referrer_id": user_id}).to_list(100)
+    return clean_mongo_doc(referrals)
+
+async def complete_referral(referral_code: str, new_user_id: str):
+    """Complete a referral when someone signs up using referral code"""
+    referral = await db.referrals.find_one({"referral_code": referral_code, "status": "pending"})
+    if not referral:
+        return None
+    
+    # Update referral status
+    await db.referrals.update_one(
+        {"referral_code": referral_code},
+        {
+            "$set": {
+                "referee_id": new_user_id,
+                "status": "completed",
+                "completed_at": datetime.now(timezone.utc),
+                "coins_earned": 50  # 50 EarnCoins for referral
+            }
+        }
+    )
+    
+    # Award coins to referrer
+    await award_earn_coins(referral["referrer_id"], 50, "referral", "Referral bonus for inviting a friend!", 
+                          "दोस्त को आमंत्रित करने के लिए रेफरल बोनस!", "நண்பரை அழைத்ததற்கான பரிந்துரை போனஸ்!", referral_code)
+    
+    # Award welcome coins to referee
+    await award_earn_coins(new_user_id, 25, "bonus", "Welcome bonus for joining EarnNest!", 
+                          "EarnNest में शामिल होने के लिए स्वागत बोनस!", "EarnNest இல் சேர்ந்ததற்கான வரவேற்பு போனஸ்!", referral_code)
+    
+    return clean_mongo_doc(await db.referrals.find_one({"referral_code": referral_code}))
+
+async def get_referral_stats(user_id: str):
+    """Get referral statistics for a user"""
+    stats = await db.referrals.aggregate([
+        {"$match": {"referrer_id": user_id}},
+        {"$group": {
+            "_id": None,
+            "total_referrals": {"$sum": 1},
+            "completed_referrals": {
+                "$sum": {"$cond": [{"$eq": ["$status", "completed"]}, 1, 0]}
+            },
+            "pending_referrals": {
+                "$sum": {"$cond": [{"$eq": ["$status", "pending"]}, 1, 0]}
+            },
+            "total_coins_earned": {"$sum": "$coins_earned"}
+        }}
+    ]).to_list(1)
+    
+    return stats[0] if stats else {
+        "total_referrals": 0, "completed_referrals": 0, 
+        "pending_referrals": 0, "total_coins_earned": 0
+    }
+
+# EarnCoins System Functions
+async def award_earn_coins(user_id: str, amount: int, source: str, description: str, 
+                          description_hi: str, description_ta: str, reference_id: str = None):
+    """Award EarnCoins to a user"""
+    from models import EarnCoinsTransaction
+    
+    transaction = EarnCoinsTransaction(
+        user_id=user_id,
+        type="earned",
+        amount=amount,
+        source=source,
+        description=description,
+        description_hi=description_hi,
+        description_ta=description_ta,
+        reference_id=reference_id
+    )
+    
+    # Insert transaction
+    await db.earncoins_transactions.insert_one(transaction.dict())
+    
+    # Update user's coin balance
+    await db.users.update_one(
+        {"id": user_id},
+        {
+            "$inc": {
+                "earn_coins_balance": amount,
+                "total_earn_coins_earned": amount
+            }
+        }
+    )
+    
+    return True
+
+async def spend_earn_coins(user_id: str, amount: int, source: str, description: str, 
+                          description_hi: str, description_ta: str, reference_id: str = None):
+    """Spend user's EarnCoins"""
+    from models import EarnCoinsTransaction
+    
+    # Check if user has enough coins
+    user = await get_user_by_id(user_id)
+    if not user or user.get("earn_coins_balance", 0) < amount:
+        return False
+    
+    transaction = EarnCoinsTransaction(
+        user_id=user_id,
+        type="spent",
+        amount=amount,
+        source=source,
+        description=description,
+        description_hi=description_hi,
+        description_ta=description_ta,
+        reference_id=reference_id
+    )
+    
+    # Insert transaction
+    await db.earncoins_transactions.insert_one(transaction.dict())
+    
+    # Update user's coin balance
+    await db.users.update_one(
+        {"id": user_id},
+        {"$inc": {"earn_coins_balance": -amount}}
+    )
+    
+    return True
+
+async def get_user_coin_transactions(user_id: str, limit: int = 50):
+    """Get user's EarnCoins transaction history"""
+    transactions = await db.earncoins_transactions.find(
+        {"user_id": user_id}
+    ).sort("created_at", -1).limit(limit).to_list(limit)
+    
+    return clean_mongo_doc(transactions)
+
+# Achievement System Functions
+async def create_achievement(achievement_data: dict):
+    """Create a new achievement"""
+    from models import Achievement
+    
+    achievement = Achievement(**achievement_data)
+    result = await db.achievements.insert_one(achievement.dict())
+    return clean_mongo_doc(await db.achievements.find_one({"_id": result.inserted_id}))
+
+async def get_all_achievements():
+    """Get all available achievements"""
+    achievements = await db.achievements.find({"is_active": True}).to_list(100)
+    return clean_mongo_doc(achievements)
+
+async def award_achievement(user_id: str, achievement_id: str, progress: float = 100.0):
+    """Award an achievement to a user"""
+    from models import UserAchievement
+    
+    # Check if user already has this achievement
+    existing = await db.user_achievements.find_one({
+        "user_id": user_id,
+        "achievement_id": achievement_id
+    })
+    
+    if existing:
+        return clean_mongo_doc(existing)
+    
+    user_achievement = UserAchievement(
+        user_id=user_id,
+        achievement_id=achievement_id,
+        progress=progress
+    )
+    
+    # Insert achievement
+    result = await db.user_achievements.insert_one(user_achievement.dict())
+    
+    # Update user's achievement count
+    await db.users.update_one(
+        {"id": user_id},
+        {"$inc": {"total_achievements_earned": 1, "experience_points": 25}}
+    )
+    
+    # Award coins for achievement (basic: 10 coins, medium: 25, hard: 50, legendary: 100)
+    achievement = await db.achievements.find_one({"id": achievement_id})
+    if achievement:
+        coin_rewards = {"easy": 10, "medium": 25, "hard": 50, "legendary": 100}
+        coins = coin_rewards.get(achievement.get("difficulty", "easy"), 10)
+        
+        await award_earn_coins(
+            user_id, coins, "achievement", f"Achievement unlocked: {achievement['name']}",
+            f"उपलब्धि अनलॉक: {achievement.get('name_hi', achievement['name'])}",
+            f"சாதனை திறக்கப்பட்டது: {achievement.get('name_ta', achievement['name'])}",
+            achievement_id
+        )
+    
+    return clean_mongo_doc(await db.user_achievements.find_one({"_id": result.inserted_id}))
+
+async def get_user_achievements(user_id: str):
+    """Get all achievements earned by a user"""
+    pipeline = [
+        {"$match": {"user_id": user_id}},
+        {"$lookup": {
+            "from": "achievements",
+            "localField": "achievement_id",
+            "foreignField": "id",
+            "as": "achievement"
+        }},
+        {"$unwind": "$achievement"},
+        {"$sort": {"earned_at": -1}}
+    ]
+    
+    achievements = await db.user_achievements.aggregate(pipeline).to_list(100)
+    return clean_mongo_doc(achievements)
+
+# Daily Streak Functions
+async def update_user_streak(user_id: str, streak_type: str):
+    """Update user's daily streak"""
+    from models import UserStreak
+    from datetime import date, timedelta
+    
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    
+    # Get existing streak
+    streak = await db.user_streaks.find_one({"user_id": user_id, "streak_type": streak_type})
+    
+    if not streak:
+        # Create new streak
+        new_streak = UserStreak(
+            user_id=user_id,
+            streak_type=streak_type,
+            current_streak=1,
+            longest_streak=1,
+            last_activity_date=datetime.now(timezone.utc),
+            total_activities=1
+        )
+        await db.user_streaks.insert_one(new_streak.dict())
+        current_streak = 1
+    else:
+        last_activity = streak["last_activity_date"].date() if streak["last_activity_date"] else None
+        
+        if last_activity == today:
+            # Already updated today
+            current_streak = streak["current_streak"]
+        elif last_activity == yesterday:
+            # Continue streak
+            current_streak = streak["current_streak"] + 1
+            await db.user_streaks.update_one(
+                {"user_id": user_id, "streak_type": streak_type},
+                {
+                    "$set": {
+                        "current_streak": current_streak,
+                        "longest_streak": max(current_streak, streak["longest_streak"]),
+                        "last_activity_date": datetime.now(timezone.utc),
+                        "updated_at": datetime.now(timezone.utc)
+                    },
+                    "$inc": {"total_activities": 1}
+                }
+            )
+        else:
+            # Streak broken, start over
+            current_streak = 1
+            await db.user_streaks.update_one(
+                {"user_id": user_id, "streak_type": streak_type},
+                {
+                    "$set": {
+                        "current_streak": 1,
+                        "last_activity_date": datetime.now(timezone.utc),
+                        "updated_at": datetime.now(timezone.utc)
+                    },
+                    "$inc": {"total_activities": 1}
+                }
+            )
+    
+    # Award coins for milestones
+    if current_streak in [7, 30, 100, 365]:  # Weekly, monthly, 100 days, yearly milestones
+        milestone_coins = {"7": 25, "30": 100, "100": 500, "365": 2000}
+        coins = milestone_coins[str(current_streak)]
+        
+        await award_earn_coins(
+            user_id, coins, "streak", f"{current_streak} day {streak_type.replace('_', ' ')} streak!",
+            f"{current_streak} दिन {streak_type.replace('_', ' ')} स्ट्रीक!",
+            f"{current_streak} நாள் {streak_type.replace('_', ' ')} தொடர்!",
+            f"streak_{current_streak}"
+        )
+    
+    return current_streak
+
+async def get_user_streaks(user_id: str):
+    """Get all user's streaks"""
+    streaks = await db.user_streaks.find({"user_id": user_id}).to_list(100)
+    return clean_mongo_doc(streaks)
+
+# Festival Functions
+async def create_festival(festival_data: dict):
+    """Create a new festival"""
+    from models import Festival
+    
+    festival = Festival(**festival_data)
+    result = await db.festivals.insert_one(festival.dict())
+    return clean_mongo_doc(await db.festivals.find_one({"_id": result.inserted_id}))
+
+async def get_upcoming_festivals(days_ahead: int = 60):
+    """Get upcoming festivals in the next N days"""
+    start_date = datetime.now(timezone.utc)
+    end_date = start_date + timedelta(days=days_ahead)
+    
+    festivals = await db.festivals.find({
+        "date": {"$gte": start_date, "$lte": end_date},
+        "is_active": True
+    }).sort("date", 1).to_list(20)
+    
+    return clean_mongo_doc(festivals)
+
+async def get_all_festivals():
+    """Get all festivals"""
+    festivals = await db.festivals.find({"is_active": True}).sort("date", 1).to_list(100)
+    return clean_mongo_doc(festivals)
+
+async def create_user_festival_budget(user_id: str, festival_id: str, budget_data: dict):
+    """Create a festival budget for user"""
+    from models import UserFestivalBudget
+    
+    # Check if budget already exists
+    existing = await db.user_festival_budgets.find_one({
+        "user_id": user_id,
+        "festival_id": festival_id,
+        "is_active": True
+    })
+    
+    if existing:
+        # Update existing budget
+        await db.user_festival_budgets.update_one(
+            {"user_id": user_id, "festival_id": festival_id, "is_active": True},
+            {
+                "$set": {
+                    **budget_data,
+                    "updated_at": datetime.now(timezone.utc)
+                }
+            }
+        )
+        return clean_mongo_doc(await db.user_festival_budgets.find_one({
+            "user_id": user_id, "festival_id": festival_id, "is_active": True
+        }))
+    else:
+        # Create new budget
+        festival_budget = UserFestivalBudget(
+            user_id=user_id,
+            festival_id=festival_id,
+            **budget_data
+        )
+        result = await db.user_festival_budgets.insert_one(festival_budget.dict())
+        return clean_mongo_doc(await db.user_festival_budgets.find_one({"_id": result.inserted_id}))
+
+async def get_user_festival_budgets(user_id: str):
+    """Get user's festival budgets with festival details"""
+    pipeline = [
+        {"$match": {"user_id": user_id, "is_active": True}},
+        {"$lookup": {
+            "from": "festivals",
+            "localField": "festival_id",
+            "foreignField": "id",
+            "as": "festival"
+        }},
+        {"$unwind": "$festival"},
+        {"$sort": {"festival.date": 1}}
+    ]
+    
+    budgets = await db.user_festival_budgets.aggregate(pipeline).to_list(50)
+    return clean_mongo_doc(budgets)
+
+# Challenge System Functions
+async def create_challenge(challenge_data: dict):
+    """Create a new challenge"""
+    from models import Challenge
+    
+    challenge = Challenge(**challenge_data)
+    result = await db.challenges.insert_one(challenge.dict())
+    return clean_mongo_doc(await db.challenges.find_one({"_id": result.inserted_id}))
+
+async def get_active_challenges():
+    """Get all active challenges"""
+    now = datetime.now(timezone.utc)
+    challenges = await db.challenges.find({
+        "is_active": True,
+        "start_date": {"$lte": now},
+        "end_date": {"$gte": now}
+    }).sort("start_date", 1).to_list(50)
+    
+    return clean_mongo_doc(challenges)
+
+async def join_challenge(user_id: str, challenge_id: str):
+    """User joins a challenge"""
+    from models import UserChallenge
+    
+    # Check if user already joined this challenge
+    existing = await db.user_challenges.find_one({
+        "user_id": user_id,
+        "challenge_id": challenge_id
+    })
+    
+    if existing:
+        return clean_mongo_doc(existing)
+    
+    user_challenge = UserChallenge(
+        user_id=user_id,
+        challenge_id=challenge_id
+    )
+    
+    result = await db.user_challenges.insert_one(user_challenge.dict())
+    return clean_mongo_doc(await db.user_challenges.find_one({"_id": result.inserted_id}))
+
+async def update_challenge_progress(user_id: str, challenge_id: str, progress_value: float):
+    """Update user's progress in a challenge"""
+    challenge = await db.challenges.find_one({"id": challenge_id})
+    if not challenge:
+        return None
+    
+    # Calculate progress percentage
+    progress_percentage = min((progress_value / challenge["target_value"]) * 100, 100)
+    
+    result = await db.user_challenges.update_one(
+        {"user_id": user_id, "challenge_id": challenge_id},
+        {
+            "$set": {
+                "current_progress": progress_percentage,
+                "status": "completed" if progress_percentage >= 100 else "active"
+            }
+        }
+    )
+    
+    # Award coins if challenge completed
+    if progress_percentage >= 100:
+        user_challenge = await db.user_challenges.find_one({
+            "user_id": user_id,
+            "challenge_id": challenge_id
+        })
+        
+        if user_challenge and not user_challenge.get("reward_claimed", False):
+            await award_earn_coins(
+                user_id, challenge["reward_coins"], "challenge", 
+                f"Challenge completed: {challenge['name']}",
+                f"चुनौती पूरी: {challenge.get('name_hi', challenge['name'])}",
+                f"சவால் முடிந்தது: {challenge.get('name_ta', challenge['name'])}",
+                challenge_id
+            )
+            
+            await db.user_challenges.update_one(
+                {"user_id": user_id, "challenge_id": challenge_id},
+                {
+                    "$set": {
+                        "reward_claimed": True,
+                        "completed_at": datetime.now(timezone.utc)
+                    }
+                }
+            )
+    
+    return clean_mongo_doc(await db.user_challenges.find_one({
+        "user_id": user_id, "challenge_id": challenge_id
+    }))
+
+async def get_user_challenges(user_id: str):
+    """Get user's challenges with challenge details"""
+    pipeline = [
+        {"$match": {"user_id": user_id}},
+        {"$lookup": {
+            "from": "challenges",
+            "localField": "challenge_id",
+            "foreignField": "id",
+            "as": "challenge"
+        }},
+        {"$unwind": "$challenge"},
+        {"$sort": {"started_at": -1}}
+    ]
+    
+    challenges = await db.user_challenges.aggregate(pipeline).to_list(50)
+    return clean_mongo_doc(challenges)

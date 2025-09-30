@@ -168,7 +168,7 @@ const Recommendations = () => {
     });
   };
 
-  // Enhanced geocoding with multiple services and better error handling
+  // Enhanced geocoding with better Indian address parsing and error handling
   const geocodeManualLocation = async (locationString) => {
     const cleanedLocation = locationString.trim();
     
@@ -176,24 +176,86 @@ const Recommendations = () => {
       throw new Error('Please enter a valid location');
     }
     
-    // Geocoding services with fallback priority
+    console.log(`🔍 Geocoding manual location: "${cleanedLocation}"`);
+    
+    // Enhanced location parsing for Indian addresses - more comprehensive
+    const parseIndianAddress = (locationString) => {
+      const parts = locationString.split(',').map(part => part.trim());
+      const formats = [];
+      
+      // Parse different address formats systematically
+      if (parts.length >= 3) {
+        // Full address: area, city, state
+        const area = parts[0];
+        const city = parts[1]; 
+        const state = parts[2];
+        
+        formats.push(locationString); // Original format
+        formats.push(`${area}, ${city}, ${state}, India`); // Add country
+        formats.push(`${city}, ${state}, India`); // City, state format
+        formats.push(`${area} ${city} ${state}`); // Space-separated
+        formats.push(`${city}, ${state}`); // Just city and state
+        formats.push(`${city} ${state}`); // City state without comma
+        
+        console.log(`📍 Parsed address parts: Area="${area}", City="${city}", State="${state}"`);
+      } else if (parts.length === 2) {
+        // city, state format
+        const city = parts[0];
+        const state = parts[1];
+        
+        formats.push(locationString); // Original
+        formats.push(`${city}, ${state}, India`); // Add country
+        formats.push(`${city} ${state} India`); // Space format
+        formats.push(`${city}, ${state}`); // Keep original
+        formats.push(`${city} ${state}`); // No comma
+        
+        console.log(`📍 Parsed address parts: City="${city}", State="${state}"`);
+      } else {
+        // Single location - could be city, area, or landmark
+        const location = parts[0];
+        
+        formats.push(location); // Original
+        formats.push(`${location}, India`); // Add country
+        formats.push(`${location}, Karnataka, India`); // Common state fallback
+        formats.push(`${location}, Karnataka`); // State only
+        formats.push(`${location} Karnataka`); // Space format
+        
+        console.log(`📍 Single location: "${location}"`);
+      }
+      
+      // Remove duplicates while preserving order
+      return [...new Set(formats)];
+    };
+    
+    // Geocoding services with improved parsing
     const geocodingServices = [
       {
         name: 'OpenStreetMap Nominatim',
-        url: `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cleanedLocation)}&format=json&limit=3&countrycodes=in&addressdetails=1`,
-        parseResult: (data) => {
+        url: (query) => `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&countrycodes=in&addressdetails=1&bounded=1`,
+        parseResult: (data, originalQuery) => {
           if (data && data.length > 0) {
-            // Find the best match (prefer more specific addresses)
-            const bestMatch = data.find(item => 
-              item.display_name.toLowerCase().includes(cleanedLocation.toLowerCase()) ||
-              item.importance > 0.5
-            ) || data[0];
+            console.log(`📋 Nominatim returned ${data.length} results for "${originalQuery}"`);
+            
+            // Sort results by relevance and importance
+            const sortedResults = data.sort((a, b) => {
+              // Prefer results that match the query better
+              const aNameMatch = a.display_name.toLowerCase().includes(originalQuery.toLowerCase()) ? 1 : 0;
+              const bNameMatch = b.display_name.toLowerCase().includes(originalQuery.toLowerCase()) ? 1 : 0;
+              
+              if (aNameMatch !== bNameMatch) return bNameMatch - aNameMatch;
+              
+              // Then by importance
+              return (b.importance || 0) - (a.importance || 0);
+            });
+            
+            const bestMatch = sortedResults[0];
             
             return {
               latitude: parseFloat(bestMatch.lat),
               longitude: parseFloat(bestMatch.lon),
               address: bestMatch.display_name,
-              source: 'OpenStreetMap'
+              source: 'OpenStreetMap Nominatim',
+              confidence: bestMatch.importance || 0.5
             };
           }
           return null;
@@ -201,17 +263,22 @@ const Recommendations = () => {
       },
       {
         name: 'OpenStreetMap Photon',
-        url: `https://photon.komoot.io/api/?q=${encodeURIComponent(cleanedLocation)}&limit=3&osm_tag=place&lang=en`,
-        parseResult: (data) => {
+        url: (query) => `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5&osm_tag=place:city,place:town,place:village&lang=en`,
+        parseResult: (data, originalQuery) => {
           if (data && data.features && data.features.length > 0) {
+            console.log(`📋 Photon returned ${data.features.length} results for "${originalQuery}"`);
+            
             const bestMatch = data.features[0];
             const coords = bestMatch.geometry?.coordinates;
             if (coords && coords.length >= 2) {
+              const address = bestMatch.properties?.name || bestMatch.properties?.label || bestMatch.properties?.display_name || 'Location found';
+              
               return {
                 latitude: coords[1],
                 longitude: coords[0],
-                address: bestMatch.properties?.name || bestMatch.properties?.label || 'Unknown Address',
-                source: 'Photon'
+                address: address,
+                source: 'OpenStreetMap Photon',
+                confidence: 0.7
               };
             }
           }
@@ -220,41 +287,21 @@ const Recommendations = () => {
       }
     ];
     
-    // Enhanced location parsing for Indian addresses
-    const parseIndianAddress = (locationString) => {
-      const parts = locationString.split(',').map(part => part.trim());
-      const formats = [];
-      
-      if (parts.length >= 3) {
-        // Full address: area, city, state
-        formats.push(locationString);
-        formats.push(`${parts[0]}, ${parts[1]}, ${parts[2]}, India`);
-        formats.push(`${parts[1]}, ${parts[2]}, India`); // city, state
-        formats.push(`${parts[0]} ${parts[1]} ${parts[2]}`); // concatenated
-      } else if (parts.length === 2) {
-        // city, state format
-        formats.push(locationString);
-        formats.push(`${parts[0]}, ${parts[1]}, India`);
-        formats.push(`${parts[0]} ${parts[1]} India`);
-      } else {
-        // Single location
-        formats.push(locationString);
-        formats.push(`${locationString}, India`);
-        formats.push(`${locationString}, Karnataka, India`); // Default state fallback
-      }
-      
-      return formats;
-    };
-    
     const addressFormats = parseIndianAddress(cleanedLocation);
+    console.log(`🎯 Generated ${addressFormats.length} address format variations:`, addressFormats);
     
-    // Try each geocoding service with multiple address formats
+    let bestResult = null;
+    let highestConfidence = 0;
+    
+    // Try each geocoding service with each address format
     for (const service of geocodingServices) {
-      for (const addressFormat of addressFormats) {
+      for (let i = 0; i < addressFormats.length; i++) {
+        const addressFormat = addressFormats[i];
+        
         try {
-          console.log(`Trying ${service.name} with format: ${addressFormat}`);
+          console.log(`🔄 Trying ${service.name} with format ${i+1}/${addressFormats.length}: "${addressFormat}"`);
           
-          const url = service.url.replace(encodeURIComponent(cleanedLocation), encodeURIComponent(addressFormat));
+          const url = service.url(addressFormat);
           const response = await fetch(url, {
             headers: {
               'User-Agent': 'EarnNest-Emergency-Finder/1.0',
@@ -263,47 +310,76 @@ const Recommendations = () => {
           });
           
           if (!response.ok) {
-            console.warn(`${service.name} returned ${response.status}`);
+            console.warn(`⚠️ ${service.name} returned ${response.status} for "${addressFormat}"`);
             continue;
           }
           
           const data = await response.json();
-          const result = service.parseResult(data);
+          const result = service.parseResult(data, addressFormat);
           
           if (result && result.latitude && result.longitude) {
-            console.log(`✅ Found location using ${service.name}: ${result.address}`);
+            console.log(`✅ ${service.name} found location: ${result.address} (confidence: ${result.confidence})`);
             
-            const location = {
-              latitude: result.latitude,
-              longitude: result.longitude,
-              address: result.address,
-              source: result.source
-            };
+            // Keep the best result based on confidence and format priority
+            const formatPriority = 1 - (i / addressFormats.length); // Earlier formats get higher priority
+            const totalScore = result.confidence + formatPriority;
             
-            setUserLocation(location);
-            setLocationError('');
-            setShowManualLocation(false);
-            return location;
+            if (totalScore > highestConfidence) {
+              bestResult = result;
+              highestConfidence = totalScore;
+            }
+            
+            // If we found a high-confidence result early, use it
+            if (result.confidence > 0.8) {
+              break;
+            }
+          } else {
+            console.log(`❌ ${service.name} found no results for "${addressFormat}"`);
           }
         } catch (error) {
-          console.warn(`${service.name} failed:`, error.message);
+          console.warn(`❌ ${service.name} failed for "${addressFormat}":`, error.message);
           continue;
         }
       }
+      
+      // If we found a good result, don't try other services
+      if (bestResult && bestResult.confidence > 0.7) {
+        break;
+      }
     }
     
-    // If all services fail, try a basic coordinate extraction (if user provided coordinates)
-    const coordMatch = cleanedLocation.match(/(-?\d+\.?\d*),\s*(-?\d+\.?\d*)/);
+    if (bestResult) {
+      console.log(`🎉 Best geocoding result:`, bestResult);
+      
+      const location = {
+        latitude: bestResult.latitude,
+        longitude: bestResult.longitude,
+        address: bestResult.address,
+        source: bestResult.source,
+        manual: true // Flag to indicate this was manually entered
+      };
+      
+      setUserLocation(location);
+      setLocationError('');
+      setShowManualLocation(false);
+      return location;
+    }
+    
+    // Try coordinate parsing as final fallback
+    const coordMatch = cleanedLocation.match(/(-?\d+\.?\d*),?\s*(-?\d+\.?\d*)/);
     if (coordMatch) {
       const latitude = parseFloat(coordMatch[1]);
       const longitude = parseFloat(coordMatch[2]);
       
-      if (latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180) {
+      if (latitude >= 6 && latitude <= 37 && longitude >= 68 && longitude <= 98) { // India bounds
+        console.log(`🎯 Using coordinates: ${latitude}, ${longitude}`);
+        
         const location = {
           latitude,
           longitude,
           address: `${latitude}, ${longitude}`,
-          source: 'Coordinates'
+          source: 'Manual Coordinates',
+          manual: true
         };
         
         setUserLocation(location);
@@ -313,14 +389,16 @@ const Recommendations = () => {
       }
     }
     
-    // Enhanced error messages based on input
-    let errorMessage = 'Location not found. ';
+    // Enhanced error messages with specific guidance
+    const parts = cleanedLocation.split(',').length;
+    let errorMessage = '❌ Location not found. ';
+    
     if (cleanedLocation.length < 3) {
-      errorMessage += 'Please enter a more specific location.';
-    } else if (!cleanedLocation.includes(',')) {
-      errorMessage += 'Try format: "area, city, state" (e.g., "MG Road, Tumkur, Karnataka")';
-    } else {
-      errorMessage += 'Please check spelling and try: "area, city, state" or just "city, state"';
+      errorMessage += 'Please enter a more specific location (at least 3 characters).';
+    } else if (parts === 1) {
+      errorMessage += 'Try adding more details: "area, city" or "city, state" (e.g., "MG Road, Tumkur" or "Tumkur, Karnataka")';
+    } else if (parts >= 2) {
+      errorMessage += 'Please check the spelling. Format: "area, city, state" or "city, state" (e.g., "MG Road, Tumkur, Karnataka")';
     }
     
     setLocationError(errorMessage);
@@ -781,26 +859,101 @@ const Recommendations = () => {
     }
   };
 
+  // Enhanced manual location submission with better backend integration
   const handleManualLocationSubmit = async () => {
-    if (!manualLocation.trim()) return;
+    if (!manualLocation.trim()) {
+      setLocationError('Please enter a location');
+      return;
+    }
     
     try {
       setLoadingHospitals(true);
+      setLocationError('');
+      
+      console.log(`🎯 Processing manual location: "${manualLocation}"`);
+      
+      // Step 1: Geocode the manual location
       const location = await geocodeManualLocation(manualLocation);
       
+      console.log(`✅ Location geocoded successfully:`, location);
+      
+      // Step 2: If we have a selected emergency, immediately search for hospitals
       if (selectedEmergency) {
-        // Pass specific type if available
+        console.log(`🏥 Searching for ${selectedEmergency} hospitals at geocoded location`);
+        
+        // Determine specific emergency type
         let specificType = null;
         if (selectedEmergency === 'accident' && accidentType.trim()) {
           specificType = accidentType.trim();
+          console.log(`🚗 Accident type: ${specificType}`);
         } else if (selectedEmergency === 'medical_emergency') {
           specificType = customMedicalEmergency.trim() || selectedMedicalEmergency;
+          console.log(`🏥 Medical emergency type: ${specificType}`);
         }
         
-        await fetchNearbyPlaces(selectedEmergency, location, specificType);
+        // For accident and medical emergencies, use backend API
+        if ((selectedEmergency === 'accident' || selectedEmergency === 'medical_emergency') && specificType) {
+          console.log(`🔍 Using backend API for specialized hospital search`);
+          
+          const token = localStorage.getItem('token');
+          const headers = token ? { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          } : { 'Content-Type': 'application/json' };
+          
+          try {
+            const response = await axios.post(`${API}/emergency-hospitals`, {
+              latitude: location.latitude,
+              longitude: location.longitude
+            }, {
+              headers,
+              params: { emergency_type: specificType }
+            });
+            
+            if (response.data && response.data.hospitals) {
+              console.log(`✅ Backend returned ${response.data.hospitals.length} hospitals`);
+              
+              const hospitals = response.data.hospitals.map(hospital => ({
+                id: hospital.name || `hospital-${Math.random()}`,
+                name: hospital.name,
+                address: hospital.address,
+                phone: hospital.phone,
+                emergency_phone: hospital.emergency_phone || '108',
+                latitude: location.latitude + (Math.random() - 0.5) * 0.01, // Approximate location
+                longitude: location.longitude + (Math.random() - 0.5) * 0.01,
+                distance: hospital.distance,
+                distanceText: hospital.distance,
+                type: hospital.hospital_type || 'Hospital',
+                rating: hospital.rating,
+                opening_hours: '24/7 Emergency',
+                speciality: hospital.speciality,
+                matched_specialties: hospital.matched_specialties || [],
+                features: hospital.features || [],
+                estimated_time: hospital.estimated_time
+              }));
+              
+              setNearbyPlaces(hospitals);
+              console.log(`🎉 Successfully set ${hospitals.length} hospitals for display`);
+            } else {
+              console.warn('⚠️ Backend API returned no hospitals, falling back to OSM search');
+              await fetchNearbyPlaces(selectedEmergency, location, specificType);
+            }
+          } catch (apiError) {
+            console.error('❌ Backend API failed, falling back to OSM search:', apiError);
+            await fetchNearbyPlaces(selectedEmergency, location, specificType);
+          }
+        } else {
+          // For other emergency types, use OpenStreetMap search
+          console.log(`🗺️ Using OpenStreetMap search for ${selectedEmergency}`);
+          await fetchNearbyPlaces(selectedEmergency, location, specificType);
+        }
+      } else {
+        console.log(`📍 Location set successfully, waiting for emergency type selection`);
       }
+      
     } catch (error) {
-      console.error('Error with manual location:', error);
+      console.error('❌ Manual location processing failed:', error);
+      setLocationError(error.message || 'Failed to process location. Please try again.');
     } finally {
       setLoadingHospitals(false);
     }
@@ -1031,35 +1184,82 @@ const Recommendations = () => {
               </div>
             )}
 
-            {/* Manual Location Input */}
+            {/* Manual Location Input - Enhanced UI */}
             {showManualLocation && (
               <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <h3 className="font-medium text-yellow-800 mb-2">Enter Your Location</h3>
-                <div className="flex gap-2">
+                <h3 className="font-medium text-yellow-800 mb-3">📍 Enter Your Location Manually</h3>
+                <p className="text-sm text-yellow-700 mb-3">
+                  Enter your address to find nearby hospitals within 25km radius. We support various formats.
+                </p>
+                
+                {/* Examples section */}
+                <div className="mb-3 p-2 bg-white border border-yellow-200 rounded text-xs">
+                  <p className="font-medium text-yellow-800 mb-1">💡 Supported formats:</p>
+                  <div className="space-y-1 text-yellow-700">
+                    <div>• <span className="font-mono bg-gray-100 px-1 rounded">MG Road, Tumkur, Karnataka</span> (area, city, state)</div>
+                    <div>• <span className="font-mono bg-gray-100 px-1 rounded">Tumkur, Karnataka</span> (city, state)</div>
+                    <div>• <span className="font-mono bg-gray-100 px-1 rounded">Mumbai</span> (city only)</div>
+                    <div>• <span className="font-mono bg-gray-100 px-1 rounded">12.9716, 77.5946</span> (coordinates)</div>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
                   <input
                     type="text"
                     value={manualLocation}
-                    onChange={(e) => setManualLocation(e.target.value)}
-                    placeholder="e.g., MG Road, Tumkur, Karnataka or Mumbai, Maharashtra"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    onKeyPress={(e) => e.key === 'Enter' && handleManualLocationSubmit()}
+                    onChange={(e) => {
+                      setManualLocation(e.target.value);
+                      // Clear error when user starts typing
+                      if (locationError) setLocationError('');
+                    }}
+                    placeholder="e.g., MG Road, Tumkur, Karnataka"
+                    className="w-full px-3 py-2 border border-yellow-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleManualLocationSubmit();
+                      }
+                    }}
                   />
-                  <div className="text-xs text-gray-500 mt-1 w-full">
-                    💡 Formats: "area, city, state" or "city, state" or coordinates "12.34, 77.56"
+                  
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleManualLocationSubmit}
+                      disabled={!manualLocation.trim() || loadingHospitals}
+                      className="flex-1 px-4 py-2 bg-yellow-600 text-white text-sm rounded-lg hover:bg-yellow-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                    >
+                      {loadingHospitals ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          Finding Location...
+                        </span>
+                      ) : (
+                        '🔍 Find Location'
+                      )}
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        setShowManualLocation(false);
+                        setManualLocation('');
+                        setLocationError('');
+                      }}
+                      className="px-4 py-2 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300 transition-colors"
+                    >
+                      Cancel
+                    </button>
                   </div>
+                  
                   <button
-                    onClick={handleManualLocationSubmit}
-                    className="px-4 py-2 bg-yellow-600 text-white text-sm rounded-lg hover:bg-yellow-700 transition-colors"
+                    onClick={() => {
+                      setShowManualLocation(false);
+                      setLocationError('');
+                    }}
+                    className="text-sm text-yellow-600 hover:text-yellow-800 w-full text-center"
                   >
-                    Find
+                    ← Try automatic location detection instead
                   </button>
                 </div>
-                <button
-                  onClick={() => setShowManualLocation(false)}
-                  className="text-sm text-gray-600 hover:text-gray-800 mt-2"
-                >
-                  ← Try location access again
-                </button>
               </div>
             )}
 

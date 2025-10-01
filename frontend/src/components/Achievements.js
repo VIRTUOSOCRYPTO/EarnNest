@@ -148,11 +148,28 @@ const Achievements = () => {
             <p className="text-gray-600">{t('achievements', 'subtitle')}</p>
           </div>
           {/* Real-time Status Indicator */}
-          <div className="flex items-center gap-2">
-            <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></div>
-            <span className="text-sm text-gray-500">
-              {isConnected ? 'Live Updates' : 'Offline'}
-            </span>
+          <div className="flex items-center gap-3 connection-indicator">
+            <div className={`relative flex items-center gap-2 px-3 py-2 rounded-full ${
+              isConnected 
+                ? 'bg-emerald-50 border border-emerald-200' 
+                : 'bg-gray-50 border border-gray-200'
+            }`}>
+              <div className={`w-2 h-2 rounded-full ${
+                isConnected 
+                  ? 'bg-emerald-500 animate-pulse' 
+                  : 'bg-gray-400'
+              }`}></div>
+              <span className={`text-sm font-medium ${
+                isConnected ? 'text-emerald-700' : 'text-gray-500'
+              }`}>
+                {isConnected ? '🔴 Live Updates' : '⚫ Offline'}
+              </span>
+              {isConnected && realTimeData.achievements.length > 0 && (
+                <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-400 rounded-full flex items-center justify-center">
+                  <span className="text-xs font-bold text-white">{realTimeData.achievements.length}</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -220,11 +237,11 @@ const Achievements = () => {
           return (
             <div
               key={achievement.id}
-              className={`rounded-2xl p-6 transition-all duration-200 hover:scale-105 ${
+              className={`rounded-2xl p-6 transition-all duration-300 hover:scale-105 cursor-pointer ${
                 isEarned
-                  ? `bg-gradient-to-br ${getCategoryColor(achievement.category)} text-white shadow-lg`
-                  : 'bg-white border border-gray-200 text-gray-900 shadow-sm hover:shadow-md'
-              } ${animatingAchievements.has(achievement.id) ? 'animate-bounce ring-4 ring-yellow-400 ring-opacity-75' : ''}`}
+                  ? `bg-gradient-to-br ${getCategoryColor(achievement.category)} text-white shadow-xl`
+                  : 'bg-white border border-gray-200 text-gray-900 shadow-sm hover:shadow-lg'
+              } ${animatingAchievements.has(achievement.id) ? 'animate-achievement-unlock ring-4 ring-yellow-400 ring-opacity-75 z-10 transform-gpu' : ''}`}
             >
               {/* Achievement Icon & Status */}
               <div className="flex items-center justify-between mb-4">

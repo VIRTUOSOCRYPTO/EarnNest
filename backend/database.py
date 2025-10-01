@@ -214,6 +214,9 @@ async def init_database():
         # Initialize seed data
         await init_seed_data()
         
+        # Initialize interconnected system
+        await init_interconnected_system()
+        
     except Exception as e:
         logger.error(f"Failed to initialize database: {str(e)}")
 
@@ -1163,3 +1166,521 @@ async def get_user_challenges(user_id: str):
     
     challenges = await db.user_challenges.aggregate(pipeline).to_list(50)
     return clean_mongo_doc(challenges)
+
+# ===================================
+# INTERCONNECTED ACTIVITY SYSTEM FUNCTIONS
+# ===================================
+
+async def create_activity_event(user_id: str, event_type: str, event_category: str, title: str, 
+                               description: str, metadata: dict = None, related_entities: dict = None, 
+                               points_awarded: int = 0, is_cross_section: bool = False):
+    """Create a new activity event"""
+    from models import ActivityEvent
+    
+    event = ActivityEvent(
+        user_id=user_id,
+        event_type=event_type,
+        event_category=event_category,
+        title=title,
+        description=description,
+        metadata=metadata or {},
+        related_entities=related_entities or {},
+        points_awarded=points_awarded,
+        is_cross_section_event=is_cross_section
+    )
+    
+    result = await db.activity_events.insert_one(event.dict())
+    
+    # Trigger cross-section updates if needed
+    if is_cross_section:
+        await create_cross_section_update(user_id, event_category, event_type, event.dict())
+    
+    # Update unified stats
+    await update_unified_stats(user_id)
+    
+    return clean_mongo_doc(await db.activity_events.find_one({"_id": result.inserted_id}))
+
+async def get_user_activity_feed(user_id: str, limit: int = 50):
+    """Get user's activity feed"""
+    activities = await db.activity_events.find(
+        {"user_id": user_id}
+    ).sort("created_at", -1).limit(limit).to_list(limit)
+    
+    return clean_mongo_doc(activities)
+
+async def get_community_activity_feed(limit: int = 100):
+    """Get community activity feed (anonymized)"""
+    pipeline = [
+        {"$match": {"is_cross_section_event": True}},
+        {"$lookup": {
+            "from": "users",
+            "localField": "user_id",
+            "foreignField": "id",
+            "as": "user"
+        }},
+        {"$unwind": "$user"},
+        {"$project": {
+            "event_type": 1,
+            "event_category": 1,
+            "title": 1,
+            "description": 1,
+            "points_awarded": 1,
+            "created_at": 1,
+            "user_name": "$user.full_name",
+            "user_avatar": "$user.avatar"
+        }},
+        {"$sort": {"created_at": -1}},
+        {"$limit": limit}
+    ]
+    
+    activities = await db.activity_events.aggregate(pipeline).to_list(limit)
+    return clean_mongo_doc(activities)
+
+async def create_cross_section_update(user_id: str, trigger_section: str, update_type: str, 
+                                    update_data: dict, affected_sections: list = None):
+    """Create a cross-section update"""
+    from models import CrossSectionUpdate
+    
+    if affected_sections is None:
+        # Default affected sections based on trigger
+        section_mappings = {
+            "referral": ["dashboard", "achievements", "profile"],
+            "achievement": ["dashboard", "referrals", "challenges", "festivals", "profile"],
+            "challenge": ["dashboard", "achievements", "profile", "festivals"],
+            "festival": ["dashboard", "achievements", "challenges", "profile"]
+        }
+        affected_sections = section_mappings.get(trigger_section, ["dashboard", "profile"])
+    
+    update = CrossSectionUpdate(
+        user_id=user_id,
+        trigger_section=trigger_section,
+        affected_sections=affected_sections,
+        update_type=update_type,
+        update_data=update_data
+    )
+    
+    result = await db.cross_section_updates.insert_one(update.dict())
+    return clean_mongo_doc(await db.cross_section_updates.find_one({"_id": result.inserted_id}))
+
+async def get_pending_updates(user_id: str, section: str = None):
+    """Get pending cross-section updates for user"""
+    match_filter = {"user_id": user_id, "processed": False}
+    if section:
+        match_filter["affected_sections"] = {"$in": [section]}
+    
+    updates = await db.cross_section_updates.find(match_filter).sort("created_at", -1).to_list(50)
+    return clean_mongo_doc(updates)
+
+async def mark_updates_processed(update_ids: list):
+    """Mark updates as processed"""
+    await db.cross_section_updates.update_many(
+        {"id": {"$in": update_ids}},
+        {"$set": {"processed": True}}
+    )
+
+async def create_notification(user_id: str, notification_type: str, title: str, message: str, 
+                             icon: str = "🎉", color: str = "emerald", action_url: str = None, 
+                             metadata: dict = None):
+    """Create a notification for user"""
+    from models import NotificationMessage
+    
+    notification = NotificationMessage(
+        user_id=user_id,
+        type=notification_type,
+        title=title,
+        message=message,
+        icon=icon,
+        color=color,
+        action_url=action_url,
+        metadata=metadata or {}
+    )
+    
+    result = await db.notifications.insert_one(notification.dict())
+    return clean_mongo_doc(await db.notifications.find_one({"_id": result.inserted_id}))
+
+async def get_user_notifications(user_id: str, limit: int = 20, unread_only: bool = False):
+    """Get user notifications"""
+    match_filter = {"user_id": user_id}
+    if unread_only:
+        match_filter["is_read"] = False
+    
+    notifications = await db.notifications.find(match_filter).sort("created_at", -1).limit(limit).to_list(limit)
+    return clean_mongo_doc(notifications)
+
+async def mark_notification_read(notification_id: str):
+    """Mark notification as read"""
+    await db.notifications.update_one(
+        {"id": notification_id},
+        {"$set": {"is_read": True}}
+    )
+
+async def update_unified_stats(user_id: str):
+    """Update unified stats for user"""
+    from models import UnifiedStats
+    
+    # Get current stats
+    achievements_count = await db.user_achievements.count_documents({"user_id": user_id})
+    referrals_count = await db.referrals.count_documents({"referrer_id": user_id, "status": "completed"})
+    active_challenges = await db.user_challenges.count_documents({"user_id": user_id, "status": "active"})
+    festival_participations = await db.user_festival_budgets.count_documents({"user_id": user_id, "is_active": True})
+    
+    # Calculate total points from various sources
+    coin_transactions = await db.earncoins_transactions.find({"user_id": user_id, "type": "earned"}).to_list(1000)
+    total_points = sum(tx.get("amount", 0) for tx in coin_transactions)
+    
+    # Get current streak (from login streak)
+    login_streak = await db.user_streaks.find_one({"user_id": user_id, "streak_type": "daily_login"})
+    current_streak = login_streak.get("current_streak", 0) if login_streak else 0
+    
+    # Calculate level (every 1000 points = 1 level)
+    level = max(1, total_points // 1000)
+    next_level_points = 1000 - (total_points % 1000)
+    
+    # Count cross-section events
+    cross_section_events = await db.activity_events.count_documents({"user_id": user_id, "is_cross_section_event": True})
+    
+    stats = UnifiedStats(
+        user_id=user_id,
+        total_achievements=achievements_count,
+        total_referrals=referrals_count,
+        active_challenges=active_challenges,
+        festival_participations=festival_participations,
+        total_points=total_points,
+        current_streak=current_streak,
+        level=level,
+        next_level_points=next_level_points,
+        cross_section_completions=cross_section_events
+    )
+    
+    # Upsert unified stats
+    await db.unified_stats.update_one(
+        {"user_id": user_id},
+        {"$set": stats.dict()},
+        upsert=True
+    )
+    
+    return clean_mongo_doc(await db.unified_stats.find_one({"user_id": user_id}))
+
+async def get_unified_stats(user_id: str):
+    """Get unified stats for user"""
+    stats = await db.unified_stats.find_one({"user_id": user_id})
+    if not stats:
+        # Create initial stats if not found
+        return await update_unified_stats(user_id)
+    return clean_mongo_doc(stats)
+
+# Enhanced trigger functions for interconnected events
+
+async def trigger_referral_milestone(user_id: str, milestone_count: int):
+    """Trigger referral milestone achievement"""
+    # Create activity event
+    await create_activity_event(
+        user_id=user_id,
+        event_type="referral_milestone",
+        event_category="referral",
+        title=f"{milestone_count} Successful Referrals!",
+        description=f"Reached {milestone_count} successful referrals milestone",
+        metadata={"milestone_count": milestone_count},
+        points_awarded=milestone_count * 10,
+        is_cross_section=True
+    )
+    
+    # Check for milestone achievements
+    if milestone_count == 1:
+        await award_achievement(user_id, "first_referral_achievement")
+    elif milestone_count == 5:
+        await award_achievement(user_id, "social_connector_achievement")
+    elif milestone_count == 10:
+        await award_achievement(user_id, "referral_master_achievement")
+    
+    # Create notification
+    await create_notification(
+        user_id=user_id,
+        notification_type="referral",
+        title="🎉 Referral Milestone!",
+        message=f"Congratulations! You've successfully referred {milestone_count} friends to EarnNest!",
+        icon="👥",
+        color="purple",
+        action_url="/referrals"
+    )
+
+async def trigger_achievement_unlock(user_id: str, achievement_id: str):
+    """Trigger achievement unlock event"""
+    achievement = await db.achievements.find_one({"id": achievement_id})
+    if not achievement:
+        return
+    
+    # Create activity event
+    await create_activity_event(
+        user_id=user_id,
+        event_type="achievement_unlocked",
+        event_category="achievement",
+        title=f"Achievement Unlocked: {achievement['name']}",
+        description=achievement['description'],
+        metadata={"achievement_category": achievement['category'], "difficulty": achievement['difficulty']},
+        related_entities={"achievement_id": achievement_id},
+        points_awarded=achievement.get('points_required', 25),
+        is_cross_section=True
+    )
+    
+    # Create notification
+    await create_notification(
+        user_id=user_id,
+        notification_type="achievement",
+        title=f"🏆 {achievement['name']}",
+        message=f"You've unlocked a new achievement! {achievement['description']}",
+        icon=achievement.get('badge_icon', '🏆'),
+        color="emerald",
+        action_url="/achievements"
+    )
+
+async def trigger_challenge_completion(user_id: str, challenge_id: str):
+    """Trigger challenge completion event"""
+    challenge = await db.challenges.find_one({"id": challenge_id})
+    if not challenge:
+        return
+    
+    # Create activity event
+    await create_activity_event(
+        user_id=user_id,
+        event_type="challenge_completed",
+        event_category="challenge",
+        title=f"Challenge Completed: {challenge['name']}",
+        description=f"Successfully completed the {challenge['challenge_type']} challenge",
+        metadata={"challenge_type": challenge['challenge_type'], "reward_coins": challenge['reward_coins']},
+        related_entities={"challenge_id": challenge_id},
+        points_awarded=challenge['reward_coins'],
+        is_cross_section=True
+    )
+    
+    # Check for challenge-related achievements
+    user_completed_challenges = await db.user_challenges.count_documents({
+        "user_id": user_id,
+        "status": "completed"
+    })
+    
+    if user_completed_challenges == 1:
+        await award_achievement(user_id, "first_challenge_achievement")
+    elif user_completed_challenges == 5:
+        await award_achievement(user_id, "challenge_warrior_achievement")
+    
+    # Create notification
+    await create_notification(
+        user_id=user_id,
+        notification_type="challenge",
+        title=f"🎯 Challenge Complete!",
+        message=f"Amazing! You've completed the {challenge['name']} challenge and earned {challenge['reward_coins']} coins!",
+        icon="🎯",
+        color="blue",
+        action_url="/challenges"
+    )
+
+async def trigger_festival_participation(user_id: str, festival_id: str, budget_amount: float):
+    """Trigger festival participation event"""
+    festival = await db.festivals.find_one({"id": festival_id})
+    if not festival:
+        return
+    
+    # Create activity event
+    await create_activity_event(
+        user_id=user_id,
+        event_type="festival_participated",
+        event_category="festival",
+        title=f"Festival Budget Created: {festival['name']}",
+        description=f"Created budget for {festival['name']} celebration",
+        metadata={"festival_type": festival['festival_type'], "budget_amount": budget_amount},
+        related_entities={"festival_id": festival_id},
+        points_awarded=20,
+        is_cross_section=True
+    )
+    
+    # Check for festival-related achievements
+    user_festival_count = await db.user_festival_budgets.count_documents({
+        "user_id": user_id,
+        "is_active": True
+    })
+    
+    if user_festival_count == 1:
+        await award_achievement(user_id, "festival_planner_achievement")
+    elif user_festival_count == 5:
+        await award_achievement(user_id, "cultural_enthusiast_achievement")
+    
+    # Create notification
+    await create_notification(
+        user_id=user_id,
+        notification_type="festival",
+        title=f"🎊 Festival Planning Started!",
+        message=f"Your budget for {festival['name']} has been created. Start planning your celebration!",
+        icon=festival.get('icon', '🎉'),
+        color="yellow",
+        action_url="/festivals"
+    )
+
+# Database initialization for new collections
+async def init_interconnected_system():
+    """Initialize interconnected system collections and indexes"""
+    try:
+        # Activity events collection indexes
+        await db.activity_events.create_index("user_id")
+        await db.activity_events.create_index("event_type")
+        await db.activity_events.create_index("event_category")
+        await db.activity_events.create_index("created_at")
+        await db.activity_events.create_index("is_cross_section_event")
+        await db.activity_events.create_index([("user_id", 1), ("created_at", -1)])
+        
+        # Cross section updates collection indexes
+        await db.cross_section_updates.create_index("user_id")
+        await db.cross_section_updates.create_index("trigger_section")
+        await db.cross_section_updates.create_index("processed")
+        await db.cross_section_updates.create_index("created_at")
+        await db.cross_section_updates.create_index([("user_id", 1), ("processed", 1)])
+        
+        # Notifications collection indexes
+        await db.notifications.create_index("user_id")
+        await db.notifications.create_index("type")
+        await db.notifications.create_index("is_read")
+        await db.notifications.create_index("created_at")
+        await db.notifications.create_index("expires_at", expireAfterSeconds=0)
+        await db.notifications.create_index([("user_id", 1), ("is_read", 1)])
+        
+        # Unified stats collection indexes
+        await db.unified_stats.create_index("user_id", unique=True)
+        await db.unified_stats.create_index("level")
+        await db.unified_stats.create_index("total_points")
+        await db.unified_stats.create_index("updated_at")
+        
+        logger.info("Interconnected system database indexes created successfully")
+        
+        # Initialize sample achievements for interconnection
+        await init_interconnected_achievements()
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize interconnected system: {str(e)}")
+
+async def init_interconnected_achievements():
+    """Initialize sample achievements for interconnected system"""
+    try:
+        existing_achievements = await db.achievements.count_documents({})
+        if existing_achievements == 0:
+            achievements = [
+                # Referral achievements
+                {
+                    "id": "first_referral_achievement",
+                    "name": "First Friend",
+                    "name_hi": "पहला दोस्त",
+                    "name_ta": "முதல் நண்பர்",
+                    "description": "Successfully referred your first friend to EarnNest",
+                    "description_hi": "EarnNest में अपने पहले दोस्त को सफलतापूर्वक रेफर किया",
+                    "description_ta": "EarnNest க்கு உங்கள் முதல் நண்பரை வெற்றிகரமாக பரிந்துரைத்தீர்கள்",
+                    "badge_icon": "👥",
+                    "badge_color": "#10B981",
+                    "category": "social",
+                    "difficulty": "easy",
+                    "points_required": 50,
+                    "is_active": True
+                },
+                {
+                    "id": "social_connector_achievement",
+                    "name": "Social Connector",
+                    "name_hi": "सामाजिक कनेक्टर",
+                    "name_ta": "சமூக இணைப்பாளர்",
+                    "description": "Referred 5 friends to EarnNest",
+                    "description_hi": "EarnNest में 5 दोस्तों को रेफर किया",
+                    "description_ta": "EarnNest க்கு 5 நண்பர்களை பரிந்துரைத்தீர்கள்",
+                    "badge_icon": "🌐",
+                    "badge_color": "#8B5CF6",
+                    "category": "social",
+                    "difficulty": "medium",
+                    "points_required": 250,
+                    "is_active": True
+                },
+                {
+                    "id": "referral_master_achievement",
+                    "name": "Referral Master",
+                    "name_hi": "रेफरल मास्टर",
+                    "name_ta": "பரிந்துரை மாஸ்டர்",
+                    "description": "Referred 10 friends to EarnNest",
+                    "description_hi": "EarnNest में 10 दोस्तों को रेफर किया",
+                    "description_ta": "EarnNest க்கு 10 நண்பர்களை பரிந்துரைத்தீர்கள்",
+                    "badge_icon": "👑",
+                    "badge_color": "#F59E0B",
+                    "category": "social",
+                    "difficulty": "hard",
+                    "points_required": 500,
+                    "is_active": True
+                },
+                
+                # Challenge achievements
+                {
+                    "id": "first_challenge_achievement",
+                    "name": "Challenge Starter",
+                    "name_hi": "चुनौती शुरूकर्ता",
+                    "name_ta": "சவால் துவக்குநர்",
+                    "description": "Completed your first challenge",
+                    "description_hi": "अपनी पहली चुनौती पूरी की",
+                    "description_ta": "உங்கள் முதல் சவாலை முடித்தீர்கள்",
+                    "badge_icon": "🎯",
+                    "badge_color": "#3B82F6",
+                    "category": "streak",
+                    "difficulty": "easy",
+                    "points_required": 25,
+                    "is_active": True
+                },
+                {
+                    "id": "challenge_warrior_achievement",
+                    "name": "Challenge Warrior",
+                    "name_hi": "चुनौती योद्धा",
+                    "name_ta": "சவால் வீரர்",
+                    "description": "Completed 5 challenges successfully",
+                    "description_hi": "5 चुनौतियों को सफलतापूर्वक पूरा किया",
+                    "description_ta": "5 சவால்களை வெற்றிகரமாக முடித்தீர்கள்",
+                    "badge_icon": "⚔️",
+                    "badge_color": "#DC2626",
+                    "category": "streak",
+                    "difficulty": "medium",
+                    "points_required": 125,
+                    "is_active": True
+                },
+                
+                # Festival achievements
+                {
+                    "id": "festival_planner_achievement",
+                    "name": "Festival Planner",
+                    "name_hi": "त्योहार योजनाकार",
+                    "name_ta": "திருவிழா திட்டமிடுபவர்",
+                    "description": "Created your first festival budget",
+                    "description_hi": "अपना पहला त्योहार बजट बनाया",
+                    "description_ta": "உங்கள் முதல் திருவிழா பட்ஜெட்டை உருவாக்கினீர்கள்",
+                    "badge_icon": "🎊",
+                    "badge_color": "#F59E0B",
+                    "category": "cultural",
+                    "difficulty": "easy",
+                    "points_required": 20,
+                    "is_active": True
+                },
+                {
+                    "id": "cultural_enthusiast_achievement",
+                    "name": "Cultural Enthusiast",
+                    "name_hi": "सांस्कृतिक उत्साही",
+                    "name_ta": "கலாச்சார ஆர்வலர்",
+                    "description": "Participated in 5 different festivals",
+                    "description_hi": "5 विभिन्न त्योहारों में भाग लिया",
+                    "description_ta": "5 வெவ்வேறு திருவிழாக்களில் பங்கேற்றீர்கள்",
+                    "badge_icon": "🌺",
+                    "badge_color": "#EC4899",
+                    "category": "cultural",
+                    "difficulty": "medium",
+                    "points_required": 100,
+                    "is_active": True
+                }
+            ]
+            
+            await db.achievements.insert_many(achievements)
+            logger.info(f"Inserted {len(achievements)} interconnected achievements")
+        
+        logger.info("Interconnected achievements initialization completed")
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize interconnected achievements: {str(e)}")
+
+# Call interconnected system initialization in main init_database function

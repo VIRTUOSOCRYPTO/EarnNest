@@ -293,7 +293,7 @@ const Register = () => {
                 <span className="text-white font-bold text-xl">₹</span>
               </div>
             </div>
-            <h1 className="text-4xl font-bold gradient-text mb-2">Join EarnNest</h1>
+            <h1 className="text-4xl font-bold gradient-text mb-2">Join EarnAura</h1>
             <p className="text-gray-600">Start your journey to financial success</p>
           </div>
 

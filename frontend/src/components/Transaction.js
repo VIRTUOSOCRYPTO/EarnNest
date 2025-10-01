@@ -71,6 +71,20 @@ const Transactions = () => {
     fetchTransactions();
   }, []);
 
+  // Manage body scroll when modals are open
+  useEffect(() => {
+    if (showAddForm || showReturnPrompt) {
+      document.body.classList.add('modal-open');
+    } else {
+      document.body.classList.remove('modal-open');
+    }
+    
+    // Cleanup on unmount
+    return () => {
+      document.body.classList.remove('modal-open');
+    };
+  }, [showAddForm, showReturnPrompt]);
+
   useEffect(() => {
     // Check for return from app on component mount
     checkForReturnFromApp();
@@ -260,7 +274,7 @@ const Transactions = () => {
       
       // Show subtle success notification instead of alert
       const successMessage = document.createElement('div');
-      successMessage.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transform transition-all duration-300';
+      successMessage.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-[9999] transform transition-all duration-300';
       successMessage.innerHTML = `
         <div class="flex items-center gap-2">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -574,7 +588,7 @@ const Transactions = () => {
 
       {/* Add Transaction Modal */}
       {showAddForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
           <div className="bg-white rounded-xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto slide-up">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold">Add New Transaction</h2>
@@ -1093,7 +1107,7 @@ const Transactions = () => {
 
       {/* Smart Return Prompt Modal */}
       {showReturnPrompt && visitedApp && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md slide-up shadow-2xl">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center">

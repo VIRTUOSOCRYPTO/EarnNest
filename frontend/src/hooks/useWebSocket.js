@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../App';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -222,18 +222,18 @@ export const useWebSocket = () => {
     }
   };
 
-  const addNotification = (notification) => {
+  const addNotification = React.useCallback((notification) => {
     setNotifications(prev => [notification, ...prev].slice(0, 10)); // Keep only 10 recent notifications
     
     // Auto-remove notification after 5 seconds
     setTimeout(() => {
       removeNotification(notification.id);
     }, 5000);
-  };
+  }, []);
 
-  const removeNotification = (id) => {
+  const removeNotification = React.useCallback((id) => {
     setNotifications(prev => prev.filter(notif => notif.id !== id));
-  };
+  }, []);
 
   const fetchUnifiedStats = async () => {
     try {

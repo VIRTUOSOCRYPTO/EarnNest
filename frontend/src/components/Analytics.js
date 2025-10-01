@@ -117,10 +117,10 @@ const Analytics = () => {
 
   if (loading) {
     return (
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="responsive-container py-6 sm:py-8">
         <div className="animate-pulse">
           <div className="h-8 bg-gray-200 rounded w-64 mb-6"></div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="responsive-grid cols-1 cols-lg-2">
             <div className="h-96 bg-gray-200 rounded-xl"></div>
             <div className="h-96 bg-gray-200 rounded-xl"></div>
           </div>
@@ -132,15 +132,15 @@ const Analytics = () => {
   const spendingTrend = getSpendingTrend();
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="responsive-container py-6 sm:py-8">
       {/* Header */}
-      <div className="mb-8 fade-in">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Financial Analytics</h1>
+      <div className="mb-6 sm:mb-8 fade-in">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Financial Analytics</h1>
         <p className="text-gray-600">AI-powered insights to help you make better financial decisions</p>
       </div>
 
       {/* Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+      <div className="responsive-grid cols-1 cols-md-2 cols-lg-4 mb-6 sm:mb-8">
         <div className="stat-card card-hover slide-up">
           <div className="flex items-center justify-between">
             <div>

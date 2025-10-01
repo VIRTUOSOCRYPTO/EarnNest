@@ -1045,7 +1045,7 @@ const Hustles = () => {
 
       {/* Create Hustle Modal */}
       {showCreateForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
           <div className="bg-white rounded-xl p-4 sm:p-6 w-full max-w-4xl max-h-[95vh] overflow-y-auto slide-up">
             <div className="flex items-center justify-between mb-4 sm:mb-6">
               <h2 className="text-xl sm:text-2xl font-bold">Post a Side Hustle</h2>
@@ -1258,7 +1258,7 @@ const Hustles = () => {
 
       {/* Edit Hustle Modal */}
       {editingHustle && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
           <div className="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto slide-up">
             <h2 className="text-2xl font-bold mb-6">Edit Side Hustle</h2>
             
@@ -1528,7 +1528,7 @@ const Hustles = () => {
 
       {/* Application Modal */}
       {showApplicationForm && selectedHustle && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
           <div className="bg-white rounded-xl p-6 w-full max-w-md slide-up">
             <h2 className="text-2xl font-bold mb-4">Apply to {selectedHustle.title}</h2>
             

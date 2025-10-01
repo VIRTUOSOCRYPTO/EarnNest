@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, File, UploadFile, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, File, UploadFile, Request, WebSocket, WebSocketDisconnect
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,6 +10,7 @@ import os
 import logging
 import shutil
 import uuid
+import json
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any
 
@@ -1102,6 +1103,56 @@ async def update_user_profile(request: Request, updated_data: UserUpdate, user_i
         logger.error(f"Profile update error: {str(e)}")
         raise HTTPException(status_code=500, detail="Profile update failed")
 
+# Achievement checking function
+async def check_and_trigger_transaction_achievements(user_id: str, transaction_data):
+    """Check and trigger achievement unlocks based on transaction activity"""
+    from database import award_achievement, get_user_transactions, trigger_achievement_unlock
+    
+    # Get user's transaction history
+    user_transactions = await get_user_transactions(user_id, limit=1000)
+    
+    # Check for first transaction achievement
+    if len(user_transactions) <= 1:  # This is first or second transaction (just created)
+        await award_achievement(user_id, "first_transaction", 100.0)
+        await trigger_achievement_unlock(user_id, "first_transaction")
+        
+        # Send real-time notification
+        achievement = await db.achievements.find_one({"id": "first_transaction"})
+        if achievement:
+            await send_achievement_notification(user_id, achievement)
+    
+    # Check for savings achievements based on total saved amount
+    if transaction_data.type == "expense":
+        # Calculate monthly savings (income - expenses in current month)
+        from datetime import datetime, timezone
+        current_month = datetime.now(timezone.utc).replace(day=1)
+        
+        monthly_transactions = [t for t in user_transactions 
+                              if t["date"] >= current_month]
+        monthly_income = sum([t["amount"] for t in monthly_transactions if t["type"] == "income"])
+        monthly_expenses = sum([t["amount"] for t in monthly_transactions if t["type"] == "expense"])
+        monthly_savings = monthly_income - monthly_expenses
+        
+        # Chai Money Saver - Save ₹500 in a month
+        if monthly_savings >= 500:
+            await award_achievement(user_id, "chai_money_saver", 100.0)
+            await trigger_achievement_unlock(user_id, "chai_money_saver")
+            
+            # Send real-time notification
+            achievement = await db.achievements.find_one({"id": "chai_money_saver"})
+            if achievement:
+                await send_achievement_notification(user_id, achievement)
+    
+    # Check for earning achievements
+    if transaction_data.type == "income" and transaction_data.category in ["Freelancing", "Side Hustle", "Part-time Job"]:
+        await award_achievement(user_id, "side_hustle_hero", 100.0)
+        await trigger_achievement_unlock(user_id, "side_hustle_hero")
+        
+        # Send real-time notification
+        achievement = await db.achievements.find_one({"id": "side_hustle_hero"})
+        if achievement:
+            await send_achievement_notification(user_id, achievement)
+
 # Transaction Routes
 @api_router.post("/transactions", response_model=Transaction)
 @limiter.limit("20/minute")
@@ -1148,6 +1199,9 @@ async def create_transaction_endpoint(request: Request, transaction_data: Transa
                 {"$inc": {"spent_amount": transaction_data.amount}}
             )
             
+            # Check and trigger achievements for first transaction
+            await check_and_trigger_transaction_achievements(user_id, transaction_data)
+            
         else:
             # For income transactions, no budget validation needed
             transaction = Transaction(**transaction_dict)
@@ -1158,6 +1212,9 @@ async def create_transaction_endpoint(request: Request, transaction_data: Transa
                 {"id": user_id},
                 {"$inc": {"total_earnings": transaction.amount}}
             )
+            
+            # Check and trigger achievements for first transaction
+            await check_and_trigger_transaction_achievements(user_id, transaction_data)
             
             # Recalculate and update income streak
             user_doc = await get_user_by_id(user_id)
@@ -3864,6 +3921,125 @@ async def get_interconnected_dashboard_summary_endpoint(
         logger.error(f"Get interconnected dashboard summary error: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to get dashboard summary")
 
+
+# WebSocket Connection Manager
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: Dict[str, WebSocket] = {}
+        self.user_subscriptions: Dict[str, List[str]] = {}
+    
+    async def connect(self, websocket: WebSocket, user_id: str):
+        await websocket.accept()
+        self.active_connections[user_id] = websocket
+        self.user_subscriptions[user_id] = []
+    
+    def disconnect(self, user_id: str):
+        if user_id in self.active_connections:
+            del self.active_connections[user_id]
+        if user_id in self.user_subscriptions:
+            del self.user_subscriptions[user_id]
+    
+    async def send_personal_message(self, message: dict, user_id: str):
+        if user_id in self.active_connections:
+            try:
+                await self.active_connections[user_id].send_text(json.dumps(message))
+            except:
+                self.disconnect(user_id)
+    
+    def subscribe_user(self, user_id: str, channels: List[str]):
+        if user_id in self.user_subscriptions:
+            self.user_subscriptions[user_id] = channels
+    
+    async def broadcast_to_channel(self, message: dict, channel: str):
+        disconnected_users = []
+        for user_id, subscriptions in self.user_subscriptions.items():
+            if channel in subscriptions and user_id in self.active_connections:
+                try:
+                    await self.active_connections[user_id].send_text(json.dumps(message))
+                except:
+                    disconnected_users.append(user_id)
+        
+        # Clean up disconnected users
+        for user_id in disconnected_users:
+            self.disconnect(user_id)
+
+# Global connection manager
+manager = ConnectionManager()
+
+# WebSocket endpoint
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket, token: str = None):
+    if not token:
+        await websocket.close(code=4001, reason="Authentication token required")
+        return
+    
+    # Verify token and get user
+    user_id = verify_jwt_token(token)
+    if not user_id:
+        await websocket.close(code=4001, reason="Invalid token")
+        return
+    
+    # Connect user
+    await manager.connect(websocket, user_id)
+    
+    try:
+        while True:
+            # Receive message from client
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            
+            # Handle subscription requests
+            if message.get("type") == "subscribe":
+                channels = message.get("channels", [])
+                manager.subscribe_user(user_id, channels)
+                
+                # Send confirmation
+                await manager.send_personal_message({
+                    "type": "subscription_confirmed",
+                    "channels": channels,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }, user_id)
+            
+            # Handle ping/pong for connection health
+            elif message.get("type") == "ping":
+                await manager.send_personal_message({
+                    "type": "pong",
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }, user_id)
+    
+    except WebSocketDisconnect:
+        manager.disconnect(user_id)
+    except Exception as e:
+        logger.error(f"WebSocket error for user {user_id}: {e}")
+        manager.disconnect(user_id)
+
+# Helper function to send real-time notifications
+async def send_achievement_notification(user_id: str, achievement: dict):
+    """Send achievement unlock notification via WebSocket"""
+    await manager.send_personal_message({
+        "type": "achievement_unlocked",
+        "achievement": achievement,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }, user_id)
+
+async def send_challenge_update(user_id: str, challenge: dict):
+    """Send challenge progress update via WebSocket"""
+    await manager.send_personal_message({
+        "type": "challenge_update",
+        "challenge": challenge,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }, user_id)
+
+async def send_festival_reminder(user_id: str, festival: dict):
+    """Send festival reminder via WebSocket"""
+    await manager.send_personal_message({
+        "type": "festival_reminder",
+        "festival": festival,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }, user_id)
+
+# Include the API router
+app.include_router(api_router)
 
 if __name__ == "__main__":
     import uvicorn

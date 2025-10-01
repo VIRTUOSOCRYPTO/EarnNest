@@ -74,7 +74,7 @@ const Navigation = () => {
               <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-br from-emerald-500 to-green-600 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-sm">₹</span>
               </div>
-              <h1 className="text-lg sm:text-2xl font-bold gradient-text truncate">EarnNest</h1>
+              <h1 className="text-lg sm:text-2xl font-bold gradient-text truncate">EarnAura</h1>
             </div>
 
             {/* Desktop Navigation Links */}
@@ -194,7 +194,7 @@ const Navigation = () => {
               <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-green-600 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-sm">₹</span>
               </div>
-              <h1 className="text-xl font-bold gradient-text">EarnNest</h1>
+              <h1 className="text-xl font-bold gradient-text">EarnAura</h1>
             </div>
             <button
               onClick={() => setIsMenuOpen(false)}

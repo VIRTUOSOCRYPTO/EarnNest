@@ -43,7 +43,7 @@ const Referrals = () => {
   };
 
   const copyReferralLink = () => {
-    const referralLink = `https://earnnest.com/register?ref=${user?.referral_code}`;
+    const referralLink = `https://earnaura.com/register?ref=${user?.referral_code}`;
     navigator.clipboard.writeText(referralLink);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -51,7 +51,7 @@ const Referrals = () => {
 
   const shareWhatsApp = () => {
     const message = encodeURIComponent(
-      `${t('referrals', 'invite_message')} Use my referral code: ${user?.referral_code} - https://earnnest.com/register?ref=${user?.referral_code}`
+      `${t('referrals', 'invite_message')} Use my referral code: ${user?.referral_code} - https://earnaura.com/register?ref=${user?.referral_code}`
     );
     window.open(`https://wa.me/?text=${message}`, '_blank');
   };

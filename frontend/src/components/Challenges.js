@@ -140,12 +140,32 @@ const Challenges = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          {t('challenges', 'title')} 🎯
-        </h1>
-        <p className="text-gray-600">{t('challenges', 'subtitle')}</p>
+      {/* Real-time Connection Status */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold text-gray-900">Challenges</h1>
+          <div className={`flex items-center gap-2 px-3 py-2 rounded-full ${
+            isConnected 
+              ? 'bg-emerald-50 border border-emerald-200' 
+              : 'bg-gray-50 border border-gray-200'
+          }`}>
+            <div className={`w-2 h-2 rounded-full ${
+              isConnected 
+                ? 'bg-emerald-500 animate-pulse' 
+                : 'bg-gray-400'
+            }`}></div>
+            <span className={`text-sm font-medium ${
+              isConnected ? 'text-emerald-700' : 'text-gray-500'
+            }`}>
+              {isConnected ? '🔴 Live Updates' : '⚫ Offline'}
+            </span>
+            {isConnected && liveLeaderboard.length > 0 && (
+              <div className="ml-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full animate-pulse">
+                {liveLeaderboard.length} competitors
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -184,8 +204,8 @@ const Challenges = () => {
       </div>
 
       {/* Tab Navigation */}
-      <div className="mb-6">
-        <div className="flex gap-2">
+      <div className="mb-8">
+        <div className="flex space-x-4">
           <button
             onClick={() => setActiveTab('available')}
             className={`px-6 py-3 rounded-lg font-medium transition-colors ${
@@ -194,7 +214,7 @@ const Challenges = () => {
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
-            {t('challenges', 'active_challenges')}
+            {t('challenges', 'available_challenges')} ({activeChallenges.length})
           </button>
           <button
             onClick={() => setActiveTab('joined')}
@@ -205,6 +225,21 @@ const Challenges = () => {
             }`}
           >
             {t('challenges', 'my_challenges')} ({userChallenges.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('leaderboard')}
+            className={`px-6 py-3 rounded-lg font-medium transition-colors relative ${
+              activeTab === 'leaderboard'
+                ? 'bg-blue-500 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            🏆 Live Leaderboard
+            {liveLeaderboard.length > 0 && (
+              <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center">
+                <span className="text-xs font-bold text-white">{liveLeaderboard.length}</span>
+              </div>
+            )}
           </button>
         </div>
       </div>
@@ -318,9 +353,9 @@ const Challenges = () => {
             return (
               <div
                 key={userChallenge.id}
-                className={`bg-white rounded-xl shadow-sm border overflow-hidden ${
-                  isCompleted ? 'border-emerald-200 bg-emerald-50' : 'border-gray-100'
-                }`}
+                className={`bg-white rounded-xl shadow-sm border overflow-hidden transition-all duration-500 ${
+                  isCompleted ? 'border-emerald-200 bg-emerald-50 animate-bounce-in' : 'border-gray-100'
+                } ${realTimeData.challenges.some(c => c.id === userChallenge.id) ? 'animate-leaderboard-update' : ''}`}
               >
                 {/* Challenge Header */}
                 <div className={`p-6 bg-gradient-to-r ${getChallengeTypeColor(challenge.challenge_type)} text-white`}>
@@ -355,13 +390,17 @@ const Challenges = () => {
                         {Math.round(progress)}%
                       </span>
                     </div>
-                    <div className="bg-gray-200 rounded-full h-3">
+                    <div className="bg-gray-200 rounded-full h-3 overflow-hidden">
                       <div 
-                        className={`h-3 rounded-full transition-all duration-500 ${
-                          isCompleted ? 'bg-emerald-500' : 'bg-blue-500'
+                        className={`h-3 rounded-full transition-all duration-1000 ease-out relative ${
+                          isCompleted ? 'bg-emerald-500 animate-pulse-glow' : 'bg-gradient-to-r from-blue-500 to-indigo-600'
                         }`}
                         style={{ width: `${progress}%` }}
-                      ></div>
+                      >
+                        {progress > 20 && (
+                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-slide-in-right"></div>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -433,6 +472,100 @@ const Challenges = () => {
         </div>
       )}
 
+      {/* Live Leaderboard */}
+      {activeTab === 'leaderboard' && (
+        <div className="space-y-6">
+          {/* Leaderboard Header */}
+          <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl p-6 text-white">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold mb-2">🏆 Live Leaderboard</h2>
+                <p className="text-blue-100">Real-time challenge rankings</p>
+              </div>
+              <div className="text-right">
+                <div className="text-3xl font-bold">{liveLeaderboard.length}</div>
+                <div className="text-blue-100">Active Competitors</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Leaderboard Content */}
+          {liveLeaderboard.length > 0 ? (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="p-6">
+                <div className="space-y-4">
+                  {liveLeaderboard.map((entry, index) => (
+                    <div
+                      key={entry.user_id}
+                      className={`flex items-center justify-between p-4 rounded-lg transition-all ${
+                        index === 0
+                          ? 'bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-200'
+                          : index === 1
+                          ? 'bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200'
+                          : index === 2
+                          ? 'bg-gradient-to-r from-orange-50 to-red-50 border border-orange-200'
+                          : 'bg-gray-50 border border-gray-100'
+                      }`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${
+                          index === 0
+                            ? 'bg-yellow-500 text-white'
+                            : index === 1
+                            ? 'bg-gray-400 text-white'
+                            : index === 2
+                            ? 'bg-orange-500 text-white'
+                            : 'bg-blue-500 text-white'
+                        }`}>
+                          {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
+                        </div>
+                        
+                        <div>
+                          <div className="font-semibold text-gray-900">
+                            {entry.user_name || `User ${entry.user_id}`}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            Challenge: {entry.challenge_name}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <div className="font-bold text-lg text-gray-900">
+                          {entry.progress.toFixed(1)}%
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          {entry.points} points
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Live Updates Indicator */}
+              <div className="bg-emerald-50 border-t border-emerald-100 px-6 py-3">
+                <div className="flex items-center justify-center gap-2 text-emerald-700">
+                  <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                  <span className="text-sm font-medium">Updates every 30 seconds</span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-12 bg-white rounded-xl shadow-sm border border-gray-100">
+              <TrophyIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500 text-lg">No active competitors</p>
+              <p className="text-gray-400 mt-2">Join challenges to see live rankings!</p>
+              <button
+                onClick={() => setActiveTab('available')}
+                className="mt-4 px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium"
+              >
+                Browse Challenges
+              </button>
+            </div>
+          )}
+        </div>
+      )}
       {/* Empty States */}
       {activeTab === 'available' && activeChallenges.length === 0 && (
         <div className="text-center py-12">

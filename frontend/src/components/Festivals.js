@@ -300,16 +300,29 @@ const Festivals = () => {
                       <CalendarDaysIcon className="w-4 h-4 inline mr-1" />
                       {new Date(festival.date).toLocaleDateString()}
                     </div>
-                    <div className="text-sm font-medium bg-white bg-opacity-20 px-2 py-1 rounded">
+                    <div className={`text-sm font-bold bg-white bg-opacity-20 px-3 py-1.5 rounded-lg backdrop-blur-sm ${
+                      countdown && countdown.totalMs < 24 * 60 * 60 * 1000 ? 'animate-countdown-pulse text-red-100' : ''
+                    }`}>
                       {countdown ? (
-                        countdown.days > 0 ? (
-                          `${countdown.days}d ${countdown.hours}h ${countdown.minutes}m`
-                        ) : countdown.hours > 0 ? (
-                          `${countdown.hours}h ${countdown.minutes}m ${countdown.seconds}s`
-                        ) : (
-                          `${countdown.minutes}m ${countdown.seconds}s`
-                        )
-                      ) : daysUntil > 0 ? `${daysUntil} days` : 'Today'}
+                        <div className="flex items-center gap-1">
+                          {countdown.days > 0 && (
+                            <><span className="animate-festival-countdown">{countdown.days}</span><span className="text-xs">d</span></>
+                          )}
+                          {countdown.hours > 0 && (
+                            <><span className={countdown.totalMs < 60 * 60 * 1000 ? 'animate-pulse' : ''}>{countdown.hours}</span><span className="text-xs">h</span></>
+                          )}
+                          {countdown.minutes >= 0 && (
+                            <><span className={countdown.totalMs < 60 * 1000 ? 'animate-pulse text-red-200' : ''}>{countdown.minutes}</span><span className="text-xs">m</span></>
+                          )}
+                          {countdown.totalMs < 60 * 60 * 1000 && (
+                            <><span className="animate-pulse">{countdown.seconds}</span><span className="text-xs">s</span></>
+                          )}
+                        </div>
+                      ) : daysUntil > 0 ? (
+                        <span className="animate-pulse">⏰ {daysUntil} days</span>
+                      ) : (
+                        <span className="animate-bounce text-yellow-200">🎉 Today!</span>
+                      )}
                     </div>
                   </div>
                 </div>

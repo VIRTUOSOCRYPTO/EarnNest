@@ -28,7 +28,7 @@ export const useWebSocket = () => {
 
     try {
       // Create WebSocket connection with authentication
-      const wsUrl = `${BACKEND_URL.replace('http', 'ws')}/ws?token=${token}`;
+      const wsUrl = `${BACKEND_URL.replace('https://', 'wss://').replace('http://', 'ws://')}/ws?token=${token}`;
       ws.current = new WebSocket(wsUrl);
 
       ws.current.onopen = () => {

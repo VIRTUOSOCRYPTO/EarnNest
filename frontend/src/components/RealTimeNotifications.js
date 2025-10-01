@@ -59,45 +59,91 @@ const RealTimeNotifications = () => {
   if (visibleNotifications.length === 0) return null;
 
   return (
-    <div className="fixed top-20 right-4 z-50 space-y-2 max-w-sm">
+    <div className="fixed top-20 right-4 z-50 space-y-3 max-w-sm">
       {visibleNotifications.map((notification, index) => (
         <div
           key={notification.id}
-          className={`transform transition-all duration-300 ease-in-out ${
-            index === 0 ? 'animate-slide-in-right' : ''
-          }`}
-          style={{ animationDelay: `${index * 100}ms` }}
+          className={`transform transition-all duration-500 ease-out animate-notification-entry`}
+          style={{ 
+            animationDelay: `${index * 150}ms`,
+            '--tw-translate-x': `${index * 2}px`
+          }}
         >
           <div
-            className={`rounded-lg border p-4 shadow-lg backdrop-blur-sm ${getNotificationColors(
+            className={`rounded-xl border-2 p-4 shadow-2xl backdrop-blur-lg relative overflow-hidden ${getNotificationColors(
               notification.type
             )}`}
           >
-            <div className="flex items-start">
-              <div className="flex-shrink-0">
-                {getNotificationIcon(notification.type)}
+            {/* Animated background gradient */}
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-pulse"></div>
+            
+            {/* Content */}
+            <div className="relative flex items-start">
+              <div className="flex-shrink-0 relative">
+                <div className="animate-bounce-in">
+                  {getNotificationIcon(notification.type)}
+                </div>
+                {notification.type === 'achievement' && (
+                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full animate-pulse-glow"></div>
+                )}
               </div>
-              <div className="ml-3 w-0 flex-1">
-                <p className="text-sm font-medium text-gray-900">
+              
+              <div className="ml-4 w-0 flex-1">
+                <p className="text-sm font-semibold text-gray-900 tracking-wide">
                   {notification.title}
                 </p>
-                <p className="mt-1 text-sm text-gray-600">
+                <p className="mt-1 text-sm text-gray-700 leading-relaxed">
                   {notification.message}
                 </p>
-                <p className="mt-1 text-xs text-gray-400">
-                  {notification.timestamp.toLocaleTimeString()}
-                </p>
+                <div className="mt-2 flex items-center justify-between">
+                  <p className="text-xs text-gray-500 font-medium">
+                    {notification.timestamp.toLocaleTimeString()}
+                  </p>
+                  {/* Progress bar for auto-dismiss */}
+                  <div className="w-16 h-1 bg-gray-200 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-emerald-400 to-emerald-600 rounded-full animate-progress"
+                      style={{ animation: 'progress 5s linear' }}
+                    ></div>
+                  </div>
+                </div>
               </div>
-              <div className="ml-4 flex-shrink-0 flex">
+              
+              <div className="ml-3 flex-shrink-0">
                 <button
-                  className="bg-white rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
+                  className="bg-white/80 backdrop-blur-sm rounded-lg inline-flex p-1.5 text-gray-400 hover:text-gray-600 hover:bg-white/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-all duration-200 transform hover:scale-110"
                   onClick={() => removeNotification(notification.id)}
                 >
                   <span className="sr-only">Close</span>
-                  <XMarkIcon className="h-5 w-5" aria-hidden="true" />
+                  <XMarkIcon className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
             </div>
+
+            {/* Interactive elements for different notification types */}
+            {notification.type === 'achievement' && (
+              <div className="mt-3 flex items-center space-x-2">
+                <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-semibold animate-pulse">
+                  🎉 New Achievement!
+                </span>
+              </div>
+            )}
+
+            {notification.type === 'festival' && (
+              <div className="mt-3 flex items-center space-x-2">
+                <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full font-semibold animate-festival-countdown">
+                  🎊 Festival Alert
+                </span>
+              </div>
+            )}
+
+            {notification.type === 'challenge' && (
+              <div className="mt-3 flex items-center space-x-2">
+                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-semibold">
+                  🎯 Challenge Update
+                </span>
+              </div>
+            )}
           </div>
         </div>
       ))}

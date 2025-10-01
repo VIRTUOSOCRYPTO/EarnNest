@@ -146,10 +146,10 @@ const FinancialGoals = () => {
 
   if (loading && goals.length === 0) {
     return (
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="responsive-container py-6 sm:py-8">
         <div className="animate-pulse">
           <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="responsive-grid cols-1 cols-md-2 cols-lg-3">
             {[1, 2, 3].map(i => (
               <div key={i} className="h-48 bg-gray-200 rounded-xl"></div>
             ))}
@@ -160,11 +160,11 @@ const FinancialGoals = () => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="responsive-container py-6 sm:py-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8 fade-in">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 sm:mb-8 fade-in">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center">
             <StarIcon className="w-8 h-8 mr-3 text-emerald-600" />
             Financial Goals
           </h1>
@@ -172,10 +172,10 @@ const FinancialGoals = () => {
         </div>
         <button
           onClick={() => setShowForm(true)}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-6 py-3 rounded-lg flex items-center gap-2 transition-colors shadow-lg"
+          className="btn-primary icon-text-center w-full sm:w-auto flex-shrink-0"
         >
           <PlusIcon className="w-5 h-5" />
-          Add Goal
+          <span>Add Goal</span>
         </button>
       </div>
 
@@ -201,7 +201,7 @@ const FinancialGoals = () => {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="responsive-grid cols-1 cols-md-2 cols-lg-3">
           {goals.map((goal, index) => {
             const categoryInfo = getCategoryInfo(goal.category);
             const progress = getProgressPercentage(goal.current_amount, goal.target_amount);

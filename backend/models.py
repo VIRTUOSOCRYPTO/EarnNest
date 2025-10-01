@@ -1225,3 +1225,75 @@ class UserChallenge(BaseModel):
 
 class UserChallengeCreate(BaseModel):
     challenge_id: str
+
+# ===================================
+# INTERCONNECTED ACTIVITY SYSTEM MODELS
+# ===================================
+
+class ActivityEvent(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    event_type: str  # "referral_milestone", "achievement_unlocked", "challenge_completed", "festival_participated"
+    event_category: str  # "referral", "achievement", "challenge", "festival"
+    title: str
+    description: str
+    metadata: Dict[str, Any] = {}  # Additional event data
+    related_entities: Dict[str, str] = {}  # Related IDs (achievement_id, challenge_id, etc.)
+    points_awarded: int = 0
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    is_cross_section_event: bool = False  # Events that affect multiple sections
+    
+    @validator('event_type')
+    def validate_event_type(cls, v):
+        allowed_types = [
+            "referral_milestone", "referral_success", "achievement_unlocked", 
+            "challenge_completed", "challenge_joined", "festival_participated", 
+            "festival_budget_created", "points_awarded", "streak_milestone"
+        ]
+        if v not in allowed_types:
+            raise ValueError(f'Event type must be one of: {", ".join(allowed_types)}')
+        return v
+    
+    @validator('event_category')
+    def validate_event_category(cls, v):
+        allowed_categories = ["referral", "achievement", "challenge", "festival", "general"]
+        if v not in allowed_categories:
+            raise ValueError(f'Event category must be one of: {", ".join(allowed_categories)}')
+        return v
+
+class CrossSectionUpdate(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    trigger_section: str  # Section that triggered the update
+    affected_sections: List[str] = []  # Sections that should be updated
+    update_type: str  # "stats_update", "new_achievement", "progress_update", "milestone_reached"
+    update_data: Dict[str, Any] = {}  # Data for the update
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    processed: bool = False
+
+class NotificationMessage(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    type: str  # "achievement", "referral", "challenge", "festival", "cross_section"
+    title: str
+    message: str
+    icon: str = "🎉"
+    color: str = "emerald"  # Notification color theme
+    action_url: Optional[str] = None  # Deep link to relevant section
+    metadata: Dict[str, Any] = {}
+    is_read: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    expires_at: Optional[datetime] = None
+
+class UnifiedStats(BaseModel):
+    user_id: str
+    total_achievements: int = 0
+    total_referrals: int = 0
+    active_challenges: int = 0
+    festival_participations: int = 0
+    total_points: int = 0
+    current_streak: int = 0
+    level: int = 1
+    next_level_points: int = 1000
+    cross_section_completions: int = 0  # Events that span multiple sections
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

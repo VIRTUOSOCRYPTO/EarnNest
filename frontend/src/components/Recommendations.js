@@ -1042,7 +1042,7 @@ const Recommendations = () => {
 
   if (loading) {
     return (
-      <div className="max-w-6xl mx-auto p-6">
+      <div className="responsive-container py-6 sm:py-8">
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
         </div>
@@ -1051,7 +1051,7 @@ const Recommendations = () => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-8">
+    <div className="responsive-container py-6 sm:py-8 space-y-8">
       {/* Header */}
       <div className="text-center">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Smart Recommendations</h1>

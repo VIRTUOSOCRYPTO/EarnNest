@@ -711,6 +711,31 @@ html {
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
 }
 
+/* Modal overlay positioning fixes */
+.modal-overlay {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  z-index: 9999 !important;
+  background-color: rgba(0, 0, 0, 0.5) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 1rem !important;
+}
+
+/* Ensure form modals are always on top */
+[class*="z-[9999]"] {
+  z-index: 9999 !important;
+}
+
+/* Prevent body scroll when modal is open */
+.modal-open {
+  overflow: hidden !important;
+}
+
 .gradient-text {
   background: linear-gradient(135deg, #10b981, #059669);
   -webkit-background-clip: text;

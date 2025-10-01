@@ -42,6 +42,20 @@ const FinancialGoals = () => {
     loadGoals();
   }, []);
 
+  // Manage body scroll when modal is open
+  useEffect(() => {
+    if (showForm) {
+      document.body.classList.add('modal-open');
+    } else {
+      document.body.classList.remove('modal-open');
+    }
+    
+    // Cleanup on unmount
+    return () => {
+      document.body.classList.remove('modal-open');
+    };
+  }, [showForm]);
+
   const loadGoals = async () => {
     try {
       const response = await axios.get(`${API}/financial-goals`);
@@ -305,7 +319,7 @@ const FinancialGoals = () => {
 
       {/* Goal Form Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999]">
           <div className="bg-white rounded-xl p-6 w-full max-w-md">
             <h2 className="text-xl font-bold text-gray-900 mb-4">
               {editingGoal ? 'Edit Goal' : 'Create New Goal'}

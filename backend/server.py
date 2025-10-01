@@ -753,8 +753,7 @@ async def register_user(request: Request, user_data: UserCreate):
         # VIRAL FEATURES: Handle referral if provided
         referral_bonus_message = ""
         if user_data.referred_by:
-            from database import complete_referral
-            referral = await complete_referral(user_data.referred_by, user_doc["id"])
+            referral = await enhanced_complete_referral(user_data.referred_by, user_doc["id"])
             if referral:
                 referral_bonus_message = " You and your friend both received EarnCoins bonuses!"
         
@@ -3329,11 +3328,10 @@ async def create_festival_budget_endpoint(
     budget_data: dict,
     user_id: str = Depends(get_current_user)
 ):
-    """Create or update festival budget"""
+    """Create or update festival budget with interconnected triggers"""
     try:
-        from database import create_user_festival_budget
-        
-        budget = await create_user_festival_budget(
+        # Use enhanced function that triggers interconnected events
+        budget = await enhanced_create_festival_budget(
             user_id, 
             budget_data["festival_id"], 
             {
@@ -3412,11 +3410,38 @@ async def join_challenge_endpoint(
     challenge_data: dict,
     user_id: str = Depends(get_current_user)
 ):
-    """Join a challenge"""
+    """Join a challenge with interconnected triggers"""
     try:
-        from database import join_challenge
+        from database import join_challenge, create_activity_event, create_notification
         
         user_challenge = await join_challenge(user_id, challenge_data["challenge_id"])
+        
+        # Get challenge details for activity event
+        challenge = await db.challenges.find_one({"id": challenge_data["challenge_id"]})
+        if challenge:
+            # Create activity event
+            await create_activity_event(
+                user_id=user_id,
+                event_type="challenge_joined",
+                event_category="challenge",
+                title=f"Joined Challenge: {challenge['name']}",
+                description=f"Started working on the {challenge['challenge_type']} challenge",
+                metadata={"challenge_type": challenge["challenge_type"]},
+                related_entities={"challenge_id": challenge_data["challenge_id"]},
+                points_awarded=10,
+                is_cross_section=True
+            )
+            
+            # Create notification
+            await create_notification(
+                user_id=user_id,
+                notification_type="challenge",
+                title="🎯 Challenge Started!",
+                message=f"You've joined the {challenge['name']} challenge. Good luck!",
+                icon="🎯",
+                color="blue",
+                action_url="/challenges"
+            )
         
         return {
             "success": True,
@@ -3582,6 +3607,262 @@ async def health_check():
         "version": "2.0.0",
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
+
+# ===================================
+# INTERCONNECTED ACTIVITY SYSTEM API ENDPOINTS
+# ===================================
+
+@api_router.get("/interconnected/activity-feed")
+@limiter.limit("20/minute")
+async def get_user_activity_feed_endpoint(
+    request: Request,
+    user_id: str = Depends(get_current_user),
+    limit: int = 50
+):
+    """Get user's activity feed with cross-section events"""
+    try:
+        from database import get_user_activity_feed
+        activities = await get_user_activity_feed(user_id, limit)
+        return {
+            "success": True,
+            "activities": activities,
+            "total_count": len(activities)
+        }
+    except Exception as e:
+        logger.error(f"Get user activity feed error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get activity feed")
+
+@api_router.get("/interconnected/community-feed")
+@limiter.limit("30/minute")
+async def get_community_activity_feed_endpoint(
+    request: Request,
+    user_id: str = Depends(get_current_user),
+    limit: int = 100
+):
+    """Get community activity feed for cross-section events"""
+    try:
+        from database import get_community_activity_feed
+        activities = await get_community_activity_feed(limit)
+        return {
+            "success": True,
+            "community_activities": activities,
+            "total_count": len(activities)
+        }
+    except Exception as e:
+        logger.error(f"Get community activity feed error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get community feed")
+
+@api_router.get("/interconnected/unified-stats")
+@limiter.limit("30/minute")
+async def get_unified_stats_endpoint(
+    request: Request,
+    user_id: str = Depends(get_current_user)
+):
+    """Get unified stats across all sections"""
+    try:
+        from database import get_unified_stats
+        stats = await get_unified_stats(user_id)
+        return {
+            "success": True,
+            "unified_stats": stats
+        }
+    except Exception as e:
+        logger.error(f"Get unified stats error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get unified stats")
+
+@api_router.get("/interconnected/notifications")
+@limiter.limit("30/minute")
+async def get_user_notifications_endpoint(
+    request: Request,
+    user_id: str = Depends(get_current_user),
+    limit: int = 20,
+    unread_only: bool = False
+):
+    """Get user notifications with cross-section updates"""
+    try:
+        from database import get_user_notifications
+        notifications = await get_user_notifications(user_id, limit, unread_only)
+        return {
+            "success": True,
+            "notifications": notifications,
+            "unread_count": len([n for n in notifications if not n.get("is_read", False)])
+        }
+    except Exception as e:
+        logger.error(f"Get user notifications error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get notifications")
+
+@api_router.post("/interconnected/notifications/{notification_id}/read")
+@limiter.limit("50/minute")
+async def mark_notification_read_endpoint(
+    request: Request,
+    notification_id: str,
+    user_id: str = Depends(get_current_user)
+):
+    """Mark notification as read"""
+    try:
+        from database import mark_notification_read
+        await mark_notification_read(notification_id)
+        return {"success": True, "message": "Notification marked as read"}
+    except Exception as e:
+        logger.error(f"Mark notification read error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to mark notification as read")
+
+@api_router.get("/interconnected/cross-section-updates")
+@limiter.limit("30/minute")
+async def get_cross_section_updates_endpoint(
+    request: Request,
+    user_id: str = Depends(get_current_user),
+    section: str = None
+):
+    """Get pending cross-section updates for user"""
+    try:
+        from database import get_pending_updates, mark_updates_processed
+        
+        updates = await get_pending_updates(user_id, section)
+        
+        # Mark as processed after retrieval
+        update_ids = [update["id"] for update in updates]
+        if update_ids:
+            await mark_updates_processed(update_ids)
+        
+        return {
+            "success": True,
+            "updates": updates,
+            "section_filter": section
+        }
+    except Exception as e:
+        logger.error(f"Get cross-section updates error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get cross-section updates")
+
+# Enhanced existing endpoints with interconnected triggers
+
+# Update referral completion to trigger interconnected events
+async def enhanced_complete_referral(referral_code: str, new_user_id: str):
+    """Enhanced referral completion with interconnected triggers"""
+    from database import complete_referral, get_referral_stats, trigger_referral_milestone
+    
+    # Complete the referral
+    referral = await complete_referral(referral_code, new_user_id)
+    if not referral:
+        return None
+    
+    # Get updated referral stats
+    referrer_id = referral["referrer_id"]
+    stats = await get_referral_stats(referrer_id)
+    
+    # Trigger milestone events
+    completed_count = stats["completed_referrals"]
+    if completed_count in [1, 5, 10, 25, 50]:
+        await trigger_referral_milestone(referrer_id, completed_count)
+    
+    return referral
+
+# Update achievement award to trigger interconnected events  
+async def enhanced_award_achievement(user_id: str, achievement_id: str):
+    """Enhanced achievement award with interconnected triggers"""
+    from database import award_achievement, trigger_achievement_unlock
+    
+    # Award the achievement
+    result = await award_achievement(user_id, achievement_id)
+    if result:
+        # Trigger interconnected events
+        await trigger_achievement_unlock(user_id, achievement_id)
+    
+    return result
+
+# Update challenge completion to trigger interconnected events
+async def enhanced_complete_challenge(user_id: str, challenge_id: str):
+    """Enhanced challenge completion with interconnected triggers"""
+    from database import update_challenge_progress, trigger_challenge_completion
+    
+    # Get challenge info
+    challenge = await db.challenges.find_one({"id": challenge_id})
+    if not challenge:
+        return None
+    
+    # Update progress to 100%
+    result = await update_challenge_progress(user_id, challenge_id, challenge["target_value"])
+    
+    # Check if completed and trigger events
+    user_challenge = await db.user_challenges.find_one({
+        "user_id": user_id,
+        "challenge_id": challenge_id
+    })
+    
+    if user_challenge and user_challenge.get("status") == "completed":
+        await trigger_challenge_completion(user_id, challenge_id)
+    
+    return result
+
+# Update festival budget creation to trigger interconnected events
+async def enhanced_create_festival_budget(user_id: str, festival_id: str, budget_data: dict):
+    """Enhanced festival budget creation with interconnected triggers"""
+    from database import create_user_festival_budget, trigger_festival_participation
+    
+    # Create the budget
+    result = await create_user_festival_budget(user_id, festival_id, budget_data)
+    if result:
+        # Trigger interconnected events
+        await trigger_festival_participation(user_id, festival_id, budget_data.get("total_budget", 0))
+    
+    return result
+
+@api_router.get("/interconnected/dashboard-summary")
+@limiter.limit("30/minute")
+async def get_interconnected_dashboard_summary_endpoint(
+    request: Request,
+    user_id: str = Depends(get_current_user)
+):
+    """Get comprehensive dashboard summary with interconnected data"""
+    try:
+        from database import (
+            get_unified_stats, get_user_activity_feed, 
+            get_user_notifications, get_user_achievements,
+            get_user_challenges, get_user_festival_budgets,
+            get_referral_stats
+        )
+        
+        # Get all interconnected data
+        unified_stats = await get_unified_stats(user_id)
+        recent_activities = await get_user_activity_feed(user_id, 10)
+        notifications = await get_user_notifications(user_id, 5, True)  # Only unread
+        achievements = await get_user_achievements(user_id)
+        challenges = await get_user_challenges(user_id)
+        festival_budgets = await get_user_festival_budgets(user_id)
+        referral_stats = await get_referral_stats(user_id)
+        
+        # Calculate cross-section insights
+        active_challenges = [c for c in challenges if c.get("status") == "active"]
+        recent_achievements = [a for a in achievements if a.get("earned_at") and 
+                            (datetime.now(timezone.utc) - a["earned_at"]).days <= 7]
+        
+        upcoming_festivals = [f for f in festival_budgets if f.get("festival", {}).get("date") and 
+                            f["festival"]["date"] > datetime.now(timezone.utc)]
+        
+        return {
+            "success": True,
+            "dashboard_summary": {
+                "unified_stats": unified_stats,
+                "recent_activities": recent_activities,
+                "unread_notifications": notifications,
+                "active_challenges": len(active_challenges),
+                "recent_achievements": len(recent_achievements),
+                "upcoming_festivals": len(upcoming_festivals),
+                "referral_stats": referral_stats,
+                "cross_section_highlights": {
+                    "achievements_from_referrals": len([a for a in achievements 
+                                                      if a.get("achievement", {}).get("category") == "social"]),
+                    "festival_challenges_active": len([c for c in active_challenges 
+                                                     if "festival" in c.get("challenge", {}).get("name", "").lower()]),
+                    "referral_achievements": len([a for a in achievements 
+                                                if "referral" in a.get("achievement", {}).get("name", "").lower()])
+                }
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Get interconnected dashboard summary error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get dashboard summary")
 
 
 if __name__ == "__main__":

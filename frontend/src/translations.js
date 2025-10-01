@@ -1,5 +1,5 @@
 /**
- * Multi-language translations for EarnNest
+ * Multi-language translations for EarnAura
  * Supports English (en), Hindi (hi), and Tamil (ta)
  */
 
@@ -364,7 +364,7 @@ export const translations = {
   referrals: {
     en: {
       title: "Invite Friends & Earn",
-      subtitle: "Earn EarnCoins when your friends join EarnNest",
+      subtitle: "Earn EarnCoins when your friends join EarnAura",
       your_referral_code: "Your Referral Code",
       referral_stats: "Referral Statistics",
       total_referrals: "Total Referrals",
@@ -372,14 +372,14 @@ export const translations = {
       pending_referrals: "Pending Referrals",
       coins_earned: "Coins Earned",
       share_link: "Share Your Link",
-      invite_message: "Join me on EarnNest and start your financial journey!",
+      invite_message: "Join me on EarnAura and start your financial journey!",
       copy_link: "Copy Link",
       send_whatsapp: "Send WhatsApp",
       recent_referrals: "Recent Referrals"
     },
     hi: {
       title: "दोस्तों को आमंत्रित करें और कमाएं",
-      subtitle: "जब आपके दोस्त EarnNest में शामिल होते हैं तो EarnCoins कमाएं",
+      subtitle: "जब आपके दोस्त EarnAura में शामिल होते हैं तो EarnCoins कमाएं",
       your_referral_code: "आपका रेफरल कोड",
       referral_stats: "रेफरल आंकड़े",
       total_referrals: "कुल रेफरल",
@@ -387,14 +387,14 @@ export const translations = {
       pending_referrals: "लंबित रेफरल",
       coins_earned: "कमाए गए कॉइन",
       share_link: "अपना लिंक साझा करें",
-      invite_message: "EarnNest पर मेरे साथ जुड़ें और अपनी वित्तीय यात्रा शुरू करें!",
+      invite_message: "EarnAura पर मेरे साथ जुड़ें और अपनी वित्तीय यात्रा शुरू करें!",
       copy_link: "लिंक कॉपी करें",
       send_whatsapp: "WhatsApp भेजें",
       recent_referrals: "हाल के रेफरल"
     },
     ta: {
       title: "நண்பர்களை அழைத்து சம்பாதிக்கவும்",
-      subtitle: "உங்கள் நண்பர்கள் EarnNest இல் சேரும்போது EarnCoins சம்பாதிக்கவும்",
+      subtitle: "உங்கள் நண்பர்கள் EarnAura இல் சேரும்போது EarnCoins சம்பாதிக்கவும்",
       your_referral_code: "உங்கள் பரிந்துரை குறியீடு",
       referral_stats: "பரிந்துரை புள்ளிவिवரങ்கள்",
       total_referrals: "மொத்த பரிந்துরैகள்",
@@ -402,7 +402,7 @@ export const translations = {
       pending_referrals: "நிलுவையில் உள்ள பரिந्துरैகள்",
       coins_earned: "சம्पाதিக्கப्पট्ട நाणैम्",
       share_link: "உங्গள் लिंक्कை पकिरुங्गळ्",
-      invite_message: "EarnNest इळ् एનोडु сेर्न्तु उंगळ् निधि पयणत्तै आरंभिक्कुंगळ्!",
+      invite_message: "EarnAura इळ् एનोडु сेर्न्तु उंगळ् निधि पयणत्तै आरंभिक्कुंगळ्!",
       copy_link: "लिंक् प्रतिलिपि সেय्युंगळ्",
       send_whatsapp: "WhatsApp அনुप्पुंगळ्",
       recent_referrals: "अळिय परिन्तुরैगळ्"
@@ -546,7 +546,7 @@ export const translations = {
   // Challenges  
   challenges: {
     en: {
-      title: "EarnNest Challenges",
+      title: "EarnAura Challenges",
       subtitle: "Join challenges and compete with other users",
       active_challenges: "Active Challenges", 
       my_challenges: "My Challenges",
@@ -559,7 +559,7 @@ export const translations = {
       leaderboard: "Challenge Leaderboard"
     },
     hi: {
-      title: "EarnNest चुनौतियां",
+      title: "EarnAura चुनौतियां",
       subtitle: "चुनौतियों में शामिल हों और अन्य उपयोगकर्ताओं के साथ प्रतिस्पर्धा करें",
       active_challenges: "सक्रिय चुनौतियां",
       my_challenges: "मेरी चुनौतियां", 
@@ -572,7 +572,7 @@ export const translations = {
       leaderboard: "चुनौती लीडरबोर्ड"
     },
     ta: {
-      title: "EarnNest சவால்கள்",
+      title: "EarnAura சவால்கள்",
       subtitle: "சవால்களில் சேர்ந்து பிற பயனர்களுடன் போட்டியிடுங்கள்",
       active_challenges: "செயலில் உள்ள சவால்கள்",
       my_challenges: "எனது சவால्कள்",

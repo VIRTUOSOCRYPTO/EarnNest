@@ -11,7 +11,11 @@ export const useWebSocket = () => {
     achievements: [],
     challenges: [],
     festivals: [],
-    leaderboard: []
+    referrals: [],
+    leaderboard: [],
+    crossSectionUpdates: [],
+    unifiedStats: null,
+    activityFeed: []
   });
   
   const ws = useRef(null);
@@ -35,7 +39,11 @@ export const useWebSocket = () => {
         // Send initial subscription message
         ws.current.send(JSON.stringify({
           type: 'subscribe',
-          channels: ['achievements', 'challenges', 'festivals', 'notifications', 'leaderboard']
+          channels: [
+            'achievements', 'challenges', 'festivals', 'referrals', 
+            'notifications', 'leaderboard', 'cross_section_updates', 
+            'activity_feed', 'unified_stats'
+          ]
         }));
       };
 
@@ -133,6 +141,71 @@ export const useWebSocket = () => {
         }
         break;
 
+      case 'referral_milestone':
+        setRealTimeData(prev => ({
+          ...prev,
+          referrals: [...prev.referrals, data.referral]
+        }));
+        
+        addNotification({
+          id: Date.now(),
+          type: 'referral',
+          title: '🎉 Referral Milestone!',
+          message: `Congratulations! ${data.message}`,
+          timestamp: new Date(),
+          data: data.referral
+        });
+        break;
+
+      case 'cross_section_update':
+        setRealTimeData(prev => ({
+          ...prev,
+          crossSectionUpdates: [...prev.crossSectionUpdates, data.update]
+        }));
+        
+        // Trigger updates in related sections
+        if (data.update.affected_sections.includes('dashboard')) {
+          // Update dashboard data
+          fetchUnifiedStats();
+        }
+        break;
+
+      case 'activity_feed_update':
+        setRealTimeData(prev => ({
+          ...prev,
+          activityFeed: [data.activity, ...prev.activityFeed].slice(0, 50)
+        }));
+        break;
+
+      case 'unified_stats_update':
+        setRealTimeData(prev => ({
+          ...prev,
+          unifiedStats: data.stats
+        }));
+        break;
+
+      case 'challenge_joined':
+        addNotification({
+          id: Date.now(),
+          type: 'challenge',
+          title: '🎯 Challenge Joined!',
+          message: `You've joined the ${data.challenge_name} challenge`,
+          timestamp: new Date(),
+          data: data
+        });
+        break;
+
+      case 'festival_participation':
+        addNotification({
+          id: Date.now(),
+          type: 'festival',
+          title: '🎊 Festival Planning Started!',
+          message: `Budget created for ${data.festival_name}`,
+          timestamp: new Date(),
+          data: data
+        });
+        break;
+
       case 'notification':
         addNotification({
           id: Date.now(),
@@ -160,6 +233,26 @@ export const useWebSocket = () => {
 
   const removeNotification = (id) => {
     setNotifications(prev => prev.filter(notif => notif.id !== id));
+  };
+
+  const fetchUnifiedStats = async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/interconnected/unified-stats`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setRealTimeData(prev => ({
+          ...prev,
+          unifiedStats: data.unified_stats
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to fetch unified stats:', error);
+    }
   };
 
   const sendMessage = (message) => {
@@ -195,7 +288,52 @@ export const useWebSocket = () => {
     realTimeData,
     sendMessage,
     removeNotification,
-    disconnect
+    disconnect,
+    fetchUnifiedStats,
+    // Interconnected system helpers
+    refreshActivityFeed: () => fetchActivityFeed(),
+    refreshCrossSectionUpdates: () => fetchCrossSectionUpdates()
+  };
+
+  // Helper functions for interconnected data
+  const fetchActivityFeed = async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/interconnected/activity-feed`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setRealTimeData(prev => ({
+          ...prev,
+          activityFeed: data.activities
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to fetch activity feed:', error);
+    }
+  };
+
+  const fetchCrossSectionUpdates = async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/interconnected/cross-section-updates`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setRealTimeData(prev => ({
+          ...prev,
+          crossSectionUpdates: data.updates
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to fetch cross-section updates:', error);
+    }
   };
 };
 
